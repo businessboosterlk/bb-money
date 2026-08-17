@@ -27,6 +27,10 @@
   --fs-xs:12px; --fs-sm:13px; --fs-base:15px; --fs-md:17px; --fs-lg:21px; --fs-xl:34px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
+/* An author rule that sets display BEATS the browser's own [hidden]{display:none},
+   so .info{display:flex} was rendering empty cards that JavaScript had hidden.
+   This has to win over every component rule, hence the important. */
+[hidden]{display:none!important}
 html{-webkit-text-size-adjust:100%;overscroll-behavior-y:none}
 body{background:var(--bg);color:var(--ink);min-height:100dvh;
   font:var(--fs-base)/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
@@ -2277,6 +2281,11 @@ if (location.search.includes('selftest')) setTimeout(async () => {
     ck('every tab has a drawn SVG icon',
       [...document.querySelectorAll('.tabs button')].every(b => b.querySelector('svg')));
     ck('search has a real label', !!document.querySelector('label[for="histQ"]'));
+    /* a component rule that sets display can defeat [hidden] and paint an empty card */
+    const stillShowing = [...document.querySelectorAll('[hidden]')]
+      .filter(el => el.offsetParent !== null || el.getBoundingClientRect().height > 0);
+    ck('anything marked hidden is really hidden', stillShowing.length === 0,
+      stillShowing.slice(0,3).map(e => e.id || e.className).join(', '));
     const smalls = [...document.querySelectorAll('button:not([hidden])')].filter(b => {
       if (b.offsetParent === null) return false;
       const r = b.getBoundingClientRect();
