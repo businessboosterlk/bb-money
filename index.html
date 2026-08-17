@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="BB Money">
-<meta name="build" content="bbmoney-0.3.0">
+<meta name="build" content="bbmoney-0.4.0">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
@@ -55,6 +55,8 @@ svg{display:block}
 .brandmark .ic{color:var(--accent)}
 .demopill{display:inline-flex;align-items:center;gap:6px;background:var(--warn-soft);
   color:var(--warn-ink);border-radius:var(--r-pill);padding:4px 11px;font-size:var(--fs-xs);font-weight:750}
+.whopill{display:inline-flex;align-items:center;background:var(--accent-soft);color:var(--accent-dark);
+  border-radius:var(--r-pill);padding:4px 11px;font-size:var(--fs-xs);font-weight:750}
 @media(max-width:768px){ .topbar{padding-top:var(--sat)} .topbar .col{height:var(--top-h)} }
 
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:70;background:var(--card);
@@ -199,6 +201,26 @@ input[type=file]{width:100%;font-size:var(--fs-sm)}
 #firstrun.on{display:flex}
 #firstrun .col{padding:24px 16px}
 #firstrun h1{font-size:26px;margin-bottom:8px}
+/* A ROW LIST, not stacked cards. Stacked cards in a centred fixed container grow
+   taller than the screen, push the top behind the notch and cannot be scrolled. */
+.personrow{display:flex;align-items:center;gap:14px;width:100%;min-height:64px;
+  padding:12px 14px;margin-bottom:10px;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r);text-align:left;font:inherit;color:inherit;cursor:pointer}
+.personrow .av{width:40px;height:40px;min-width:40px;border-radius:50%;background:var(--accent-soft);
+  color:var(--accent-dark);display:grid;place-items:center;font-weight:750;font-size:16px}
+.personrow .nm{flex:1;min-width:0}
+.personrow .nm b{display:block;font-size:16px;font-weight:700}
+.personrow .nm span{font-size:var(--fs-xs);color:var(--muted)}
+.personrow .chev{color:var(--faint)}
+.pindots{display:flex;gap:14px;justify-content:center;margin:10px 0 4px}
+.pindots i{width:13px;height:13px;border-radius:50%;background:var(--chip);
+  border:1.5px solid var(--line2);display:block}
+.pindots i.on{background:var(--accent);border-color:var(--accent)}
+.pinpad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
+.pinpad button{min-height:58px;border:1px solid var(--line2);background:var(--card);
+  border-radius:var(--r-sm);font-size:22px;font-weight:650;cursor:pointer}
+.pinpad button:active{background:var(--chip)}
+.pinpad button.wide{grid-column:span 1;font-size:var(--fs-sm);font-weight:700}
 
 #errbar{position:fixed;left:0;right:0;top:0;z-index:150;background:#7c2d18;color:#fff;display:none;
   padding-top:var(--sat)}
@@ -257,28 +279,44 @@ input[type=file]{width:100%;font-size:var(--fs-sm)}
   <button id="errclose" aria-label="Dismiss"><svg class="ic sm" aria-hidden="true"><use href="#i-x"/></svg></button>
 </div></div>
 
-<!-- ══════════ FIRST RUN ══════════ -->
+<!-- ══════════ LOCK: who is using the phone ══════════ -->
 <div id="firstrun" role="dialog" aria-modal="true" aria-labelledby="frTitle">
   <div class="col">
-    <svg class="ic" style="width:30px;height:30px;color:var(--accent);margin-bottom:14px" aria-hidden="true"><use href="#i-mark"/></svg>
-    <h1 id="frTitle">BB Money</h1>
-    <p class="muted" style="margin-bottom:22px">An expense record that stays on this phone. Everything in rupees.</p>
-    <div class="card info" style="margin-bottom:20px">
-      <svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg>
-      <p>Your expenses and bank statements never touch a server. There is no account and
-      no analytics. Everything happens inside your phone.</p>
+    <svg class="ic" style="width:30px;height:30px;color:var(--accent);margin-bottom:12px" aria-hidden="true"><use href="#i-mark"/></svg>
+
+    <!-- step 1: pick a person -->
+    <div id="lkWho">
+      <h1 id="frTitle">BB Money</h1>
+      <p class="muted" style="margin-bottom:18px">Who is this?</p>
+      <div id="lkList"></div>
+      <div style="height:14px"></div>
+      <button class="btn ghost" id="frDemo">Explore with sample figures</button>
+      <p class="note">Sample figures stay separate from both of your records. They are never
+      mixed into a total, a comparison or a backup.</p>
     </div>
-    <button class="btn" id="frReal">Start with my money</button>
-    <div style="height:10px"></div>
-    <button class="btn ghost" id="frDemo">Explore with sample figures</button>
-    <p class="note">Sample figures are kept completely separate from your own records.
-    They are never mixed into a total, a comparison or a backup.</p>
+
+    <!-- step 2: the PIN -->
+    <div id="lkPin" hidden>
+      <h1 id="lkPinTitle">Enter your PIN</h1>
+      <p class="muted" id="lkPinSub" style="margin-bottom:16px"></p>
+      <div class="pindots" id="lkDots" aria-hidden="true"></div>
+      <p class="note" id="lkPinMsg" style="min-height:20px;text-align:center"></p>
+      <label for="lkPinInput" class="sr">PIN</label>
+      <input type="password" id="lkPinInput" inputmode="numeric" autocomplete="off"
+        maxlength="4" pattern="[0-9]*" style="position:absolute;opacity:0;pointer-events:none;left:-9999px">
+      <div class="pinpad" id="lkPad"></div>
+      <div style="height:12px"></div>
+      <button class="btn quiet" id="lkBack">Someone else</button>
+    </div>
   </div>
 </div>
 
 <header class="topbar" id="topbar"><div class="col">
   <span class="brandmark"><svg class="ic" aria-hidden="true"><use href="#i-mark"/></svg>BB Money</span>
-  <span class="demopill" id="demoPill" hidden>Sample figures</span>
+  <span style="display:flex;align-items:center;gap:8px">
+    <span class="whopill" id="whoPill" hidden></span>
+    <span class="demopill" id="demoPill" hidden>Sample figures</span>
+  </span>
 </div></header>
 
 <main class="main"><div class="col">
@@ -423,6 +461,26 @@ input[type=file]{width:100%;font-size:var(--fs-sm)}
   </div>
 
   <div class="card">
+    <h2>This phone, two people</h2>
+    <p class="note" style="margin-top:2px">Shiara and Thulaib keep separate records here.
+    Neither one's figures, guide, backup or statements ever appear in the other's app.
+    <b>The PIN keeps your numbers off the screen when the other person opens the app.
+    It is not a lock on the data:</b> anyone holding this phone unlocked could read the
+    store directly, so treat it as a curtain, not a safe.</p>
+    <div style="height:10px"></div>
+    <button class="setrow" id="lockBtn">
+      <svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg>
+      <span class="lab"><b>Lock and switch person</b><span id="lockSub"></span></span>
+      <svg class="ic sm chev" aria-hidden="true"><use href="#i-chev"/></svg>
+    </button>
+    <button class="setrow" id="pinBtn" style="border-bottom:0">
+      <svg class="ic" aria-hidden="true"><use href="#i-edit"/></svg>
+      <span class="lab"><b>Change my PIN</b><span>Asks for the new one twice</span></span>
+      <svg class="ic sm chev" aria-hidden="true"><use href="#i-chev"/></svg>
+    </button>
+  </div>
+
+  <div class="card">
     <h2>Backup</h2>
     <p class="note" style="margin-top:2px">A single file you keep. It never goes anywhere on its own.</p>
     <div style="height:10px"></div>
@@ -474,7 +532,7 @@ input[type=file]{width:100%;font-size:var(--fs-sm)}
     </button>
     <button class="setrow" id="delAllBtn" style="border-bottom:0">
       <svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg>
-      <span class="lab"><b>Delete everything</b><span>Every record, the monthly guide and all settings</span></span>
+      <span class="lab"><b>Delete everything of mine</b><span id="delAllSub">All my records, my monthly guide and my settings</span></span>
       <svg class="ic sm chev" aria-hidden="true"><use href="#i-chev"/></svg>
     </button>
   </div>
@@ -600,8 +658,17 @@ input[type=file]{width:100%;font-size:var(--fs-sm)}
 <script>
 (() => {
 'use strict';
-const APP = 'BB Money', APP_VER = '0.3.0', SCHEMA = 3;
-const DB_NAME = 'bbmoney', DB_VER = 3;
+const APP = 'BB Money', APP_VER = '0.4.0', SCHEMA = 4;
+const DB_NAME = 'bbmoney', DB_VER = 4;
+/* Two people share this app, each with their own records on this phone.
+   NOTE ON THE PIN, and it is deliberate: no PIN is written into this page. The page
+   is public, so anything in it is readable by anyone, and BB's own L-015 rule
+   forbids a credential literal in front-end source. Each person sets their own PIN
+   on the device the first time they open their name. What the PIN does is keep one
+   person's figures off the screen when the other picks up the phone. It is NOT a
+   lock on the data: whoever holds an unlocked phone can read the store directly,
+   and the app says so in plain words in Settings. */
+const PEOPLE = [{id:'shiara', name:'Shiara'}, {id:'thulaib', name:'Thulaib'}];
 
 /* ══════════ helpers ══════════ */
 const $ = id => document.getElementById(id);
@@ -699,6 +766,21 @@ function openDB(){
           r.month = String(r.date || '').slice(0, 7);
           r.mk = r.ledger + '|' + r.month;
           c.update(r);
+          c.continue();
+        };
+      }
+      /* v4 gives every person their own ledger. Records that existed before there
+         were people belong to Thulaib, whose phone this was. Nothing is dropped. */
+      if (old > 0 && old < 4) {
+        st.openCursor().onsuccess = ev => {
+          const c = ev.target.result;
+          if (!c) return;
+          const r = c.value;
+          if (r.ledger === 'personal') {
+            r.ledger = 'p:thulaib';
+            r.mk = r.ledger + '|' + String(r.date || '').slice(0, 7);
+            c.update(r);
+          }
           c.continue();
         };
       }
@@ -801,7 +883,14 @@ const isExpense = r => r.txType === 'expense' && COUNTED.has(r.state);
 const sum = rs => rs.reduce((s, r) => s + r.amt_c, 0);
 const byCat = rs => { const o = {}; rs.forEach(r => o[r.category] = (o[r.category] || 0) + r.amt_c); return o; };
 
-let LEDGER = 'personal';       /* 'personal' | 'demo' */
+let PERSON = null;             /* 'shiara' | 'thulaib' | 'demo' */
+let LEDGER = 'p:thulaib';      /* 'p:<id>' | 'demo' */
+const personName = id => (PEOPLE.find(p => p.id === id) || {name:'Sample figures'}).name;
+/* Every per-person setting is namespaced. Sharing one of these between two people is
+   how one person's monthly guide or import history shows up in the other's app. */
+const pk = k => k + '::' + (PERSON || 'none');
+const pget = k => metaGet(pk(k));
+const pset = (k, v) => metaSet(pk(k), v);
 let viewMonth = curMonth();
 let histMonth = curMonth();
 let histCat = null;
@@ -845,23 +934,13 @@ async function boot(){
     return;
   }
   try {
-    let ld = await metaGet('ledger');
-    if (!ld) {
-      /* an existing v1 install has rows already; do not ask it to choose again */
-      const nPersonal = await countLedger('personal');
-      const nDemo = await countLedger('demo');
-      if (nPersonal > 0) { ld = 'personal'; await metaSet('ledger', ld); }
-      else if (nDemo > 0) { ld = 'demo'; await metaSet('ledger', ld); }
-    }
-    if (!ld) { openFirstRun(); return; }
-    LEDGER = ld;
-    await afterLedgerKnown();
+    openLock();
   } catch (e) {
     showError(dbErrorText(e), e);
   }
 }
 async function afterLedgerKnown(){
-  const bud = await metaGet('budget_c');
+  const bud = await pget('budget_c');
   $('budgetIn').value = bud ? fmt(bud) : '';
   viewMonth = curMonth(); histMonth = curMonth();
   await loadRules();
@@ -871,26 +950,131 @@ async function afterLedgerKnown(){
   refreshPersistUI();
 }
 
-/* ══════════ first run ══════════ */
-function openFirstRun(){ $('firstrun').classList.add('on'); $('frReal').focus(); }
-$('frReal').addEventListener('click', async () => {
-  try {
-    LEDGER = 'personal';
-    await metaSet('ledger', 'personal');
-    $('firstrun').classList.remove('on');
-    await afterLedgerKnown();
-    say('Ready. Add your first expense when you are.');
-  } catch (e) { showError(dbErrorText(e), e); }
+/* ══════════ lock screen: two people, one phone ══════════ */
+let pinFor = null, pinBuf = '', pinStage = 'enter', pinFirst = '';
+
+async function pinHash(id, pin){
+  let salt = await metaGet('pinsalt');
+  if (!salt) {
+    salt = [...crypto.getRandomValues(new Uint8Array(16))]
+      .map(b => b.toString(16).padStart(2, '0')).join('');
+    await metaSet('pinsalt', salt);
+  }
+  const buf = new TextEncoder().encode(salt + ':' + id + ':' + pin);
+  const d = await crypto.subtle.digest('SHA-256', buf);
+  return [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function openLock(){
+  PERSON = null;
+  $('lkWho').hidden = false; $('lkPin').hidden = true;
+  const rows = await Promise.all(PEOPLE.map(async p => {
+    const set = !!(await metaGet('pin::' + p.id));
+    const n = await countLedger('p:' + p.id);
+    return `<button class="personrow" data-person="${p.id}">
+      <span class="av" aria-hidden="true">${esc(p.name.slice(0, 1))}</span>
+      <span class="nm"><b>${esc(p.name)}</b>
+        <span>${set ? (n ? n + ' record' + (n === 1 ? '' : 's') : 'no records yet')
+                    : 'set a PIN to begin'}</span></span>
+      <svg class="ic sm chev" aria-hidden="true"><use href="#i-chev"/></svg>
+    </button>`;
+  }));
+  $('lkList').innerHTML = rows.join('');
+  $('firstrun').classList.add('on');
+  const first = $('lkList').querySelector('.personrow');
+  if (first) first.focus();
+}
+$('lkList').addEventListener('click', async e => {
+  const b = e.target.closest('[data-person]');
+  if (b) await askPin(b.dataset.person);
 });
+async function askPin(id){
+  pinFor = id; pinBuf = ''; pinFirst = '';
+  const existing = await metaGet('pin::' + id);
+  pinStage = existing ? 'enter' : 'set';
+  $('lkWho').hidden = true; $('lkPin').hidden = false;
+  $('lkPinTitle').textContent = pinStage === 'set'
+    ? 'Choose a PIN, ' + personName(id) : 'Enter your PIN, ' + personName(id);
+  $('lkPinSub').textContent = pinStage === 'set'
+    ? 'Four numbers. It keeps your figures off the screen when someone else opens the app.'
+    : '';
+  $('lkPinMsg').textContent = '';
+  paintPad(); paintDots();
+  const k = $('lkPad').querySelector('button'); if (k) k.focus();
+}
+function paintPad(){
+  const keys = ['1','2','3','4','5','6','7','8','9','clear','0','back'];
+  $('lkPad').innerHTML = keys.map(k => k === 'clear'
+    ? `<button type="button" class="wide" data-k="clear">Clear</button>`
+    : k === 'back'
+    ? `<button type="button" class="wide" data-k="back" aria-label="Delete last number">Delete</button>`
+    : `<button type="button" data-k="${k}">${k}</button>`).join('');
+}
+function paintDots(){
+  $('lkDots').innerHTML = [0,1,2,3].map(i => `<i class="${i < pinBuf.length ? 'on' : ''}"></i>`).join('');
+}
+$('lkPad').addEventListener('click', async e => {
+  const b = e.target.closest('[data-k]'); if (!b) return;
+  const k = b.dataset.k;
+  if (k === 'clear') { pinBuf = ''; paintDots(); return; }
+  if (k === 'back') { pinBuf = pinBuf.slice(0, -1); paintDots(); return; }
+  if (pinBuf.length >= 4) return;
+  pinBuf += k; paintDots();
+  if (pinBuf.length === 4) await submitPin();
+});
+async function submitPin(){
+  const entered = pinBuf;
+  pinBuf = ''; paintDots();
+  try {
+    if (pinStage === 'set') {
+      pinFirst = entered; pinStage = 'confirm';
+      $('lkPinTitle').textContent = 'Type it once more';
+      $('lkPinSub').textContent = '';
+      $('lkPinMsg').textContent = '';
+      return;
+    }
+    if (pinStage === 'confirm') {
+      if (entered !== pinFirst) {
+        pinStage = 'set'; pinFirst = '';
+        $('lkPinTitle').textContent = 'Choose a PIN, ' + personName(pinFor);
+        $('lkPinMsg').textContent = 'Those two did not match. Start again.';
+        return;
+      }
+      await metaSet('pin::' + pinFor, await pinHash(pinFor, entered));
+      await enterAs(pinFor);
+      return;
+    }
+    const want = await metaGet('pin::' + pinFor);
+    if ((await pinHash(pinFor, entered)) === want) { await enterAs(pinFor); return; }
+    $('lkPinMsg').textContent = 'That PIN does not match. Try again.';
+  } catch (e) { showError(dbErrorText(e), e); }
+}
+$('lkBack').addEventListener('click', () => { openLock(); });
+
+async function enterAs(id){
+  PERSON = id;
+  LEDGER = id === 'demo' ? 'demo' : 'p:' + id;
+  await metaSet('lastPerson', id);
+  $('firstrun').classList.remove('on');
+  $('whoPill').textContent = personName(id);
+  $('whoPill').hidden = id === 'demo';
+  await afterLedgerKnown();
+  go('home');
+}
 $('frDemo').addEventListener('click', async () => {
   try {
-    LEDGER = 'demo';
-    await metaSet('ledger', 'demo');
+    PERSON = 'demo';
     if ((await countLedger('demo')) === 0) await putMany(seedRows());
-    $('firstrun').classList.remove('on');
-    await afterLedgerKnown();
+    await enterAs('demo');
   } catch (e) { showError(dbErrorText(e), e); }
 });
+function lockNow(){
+  PERSON = null;
+  document.querySelectorAll('.sheet').forEach(s => s.classList.remove('on'));
+  openSheets = []; unlockBody();
+  $('whoPill').hidden = true;
+  openLock();
+}
 
 /* ══════════ render ══════════ */
 async function renderAll(){
@@ -947,7 +1131,7 @@ async function renderHome(){
   } else {
     lines.push('No figures for the month before, so there is nothing to compare yet.');
   }
-  const bud = await metaGet('budget_c').catch(() => null);
+  const bud = await pget('budget_c').catch(() => null);
   if (bud) {
     const left = bud - total;
     lines.push(left >= 0
@@ -1137,7 +1321,7 @@ $('fCats').addEventListener('click', e => {
   const again = $('fCats').querySelector(`[data-c="${addCat}"]`); if (again) again.focus();
 });
 async function openAdd(){
-  try { addCat = (await metaGet('lastCat')) || 'food'; } catch (_) { addCat = 'food'; }
+  try { addCat = (await pget('lastCat')) || 'food'; } catch (_) { addCat = 'food'; }
   paintChips('fCats', addCat);
   $('fAmt').value = ''; $('fWho').value = ''; $('fNote').value = '';
   const t = todayISO();
@@ -1166,7 +1350,7 @@ $('addForm').addEventListener('submit', async e => {
     const rec = makeTx({amt_c: amt, merchant: $('fWho').value.trim(),
       note: $('fNote').value.trim(), date: d, category: addCat});
     await putRow(rec);
-    await metaSet('lastCat', addCat);
+    await pset('lastCat', addCat);
     await bumpSaveCount();
     closeSheet('addSheet');
     say(`Saved. LKR ${fmt(amt)}, ${catOf(addCat).name.toLowerCase()}.`);
@@ -1300,27 +1484,27 @@ $('cfClose').addEventListener('click', cfDismiss);
 $('budgetSave').addEventListener('click', async () => {
   const v = parseAmt($('budgetIn').value);
   if (!v) { say('Enter an amount first.'); return; }
-  try { await metaSet('budget_c', v); $('budgetIn').value = fmt(v); say('Monthly guide saved.'); await renderHome(); }
+  try { await pset('budget_c', v); $('budgetIn').value = fmt(v); say('Monthly guide saved.'); await renderHome(); }
   catch (e) { showError(dbErrorText(e), e); }
 });
 $('budgetClear').addEventListener('click', async () => {
-  try { await metaSet('budget_c', null); $('budgetIn').value = ''; say('Monthly guide removed.'); await renderHome(); }
+  try { await pset('budget_c', null); $('budgetIn').value = ''; say('Monthly guide removed.'); await renderHome(); }
   catch (e) { showError(dbErrorText(e), e); }
 });
 
 async function buildBackup(){
-  const rows = await readLedger('personal');   /* sample figures are never exported */
+  const rows = await readLedger(LEDGER);   /* one person's own records only */
   return {
     app: APP, appVersion: APP_VER, schema: SCHEMA,
     exported: new Date().toISOString(),
     currency: 'LKR', amounts: 'integer cents',
-    budget_c: (await metaGet('budget_c')) || null,
+    budget_c: (await pget('budget_c')) || null,
     count: rows.length,
     transactions: rows,
   };
 }
 $('exportBtn').addEventListener('click', async () => {
-  if (LEDGER !== 'personal') { say('Sample figures are not backed up. Start your own records first.'); return; }
+  if (PERSON === 'demo') { say('Sample figures are not backed up. Sign in as yourself first.'); return; }
   try {
     const payload = await buildBackup();
     if (!payload.count) { say('There is nothing to back up yet.'); return; }
@@ -1351,12 +1535,12 @@ function validateBackup(obj){
     if (!Number.isInteger(r.amt_c) || r.amt_c <= 0) return bad(`Record ${i + 1} has an amount this app cannot read.`);
     if (typeof r.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(r.date)) return bad(`Record ${i + 1} has an unreadable date.`);
     const cat = CATKEYS.has(r.category) ? r.category : 'other';
-    rows.push(makeTx(Object.assign({}, r, {category: cat, ledger: 'personal'})));
+    rows.push(makeTx(Object.assign({}, r, {category: cat, ledger: LEDGER})));
   }
   return {ok: true, rows, budget_c: Number.isInteger(obj.budget_c) ? obj.budget_c : null};
 }
 $('importBtn').addEventListener('click', () => {
-  if (LEDGER !== 'personal') { say('Start your own records before restoring a backup.'); return; }
+  if (PERSON === 'demo') { say('Sign in as yourself before restoring a backup.'); return; }
   $('importFile').value = ''; $('importFile').click();
 });
 $('importFile').addEventListener('change', async e => {
@@ -1368,7 +1552,7 @@ $('importFile').addEventListener('change', async e => {
   const v = validateBackup(parsed);
   if (!v.ok) { showError(v.why + ' Nothing was changed.'); return; }
   let existing;
-  try { existing = new Set((await readLedger('personal')).map(r => r.id)); }
+  try { existing = new Set((await readLedger(LEDGER)).map(r => r.id)); }
   catch (err) { showError(dbErrorText(err), err); return; }
   const fresh = v.rows.filter(r => !existing.has(r.id));
   const dupes = v.rows.length - fresh.length;
@@ -1387,7 +1571,7 @@ $('importFile').addEventListener('change', async e => {
       if (!fresh.length) return;
       /* one transaction, so a failure leaves the store exactly as it was */
       await putMany(fresh);
-      if (v.budget_c && !(await metaGet('budget_c'))) await metaSet('budget_c', v.budget_c);
+      if (v.budget_c && !(await pget('budget_c'))) await pset('budget_c', v.budget_c);
       say(`Restored ${fresh.length} record${fresh.length === 1 ? '' : 's'}.`);
       await afterLedgerKnown();
     }
@@ -1415,6 +1599,15 @@ $('persistBtn').addEventListener('click', async () => {
   refreshPersistUI();
 });
 
+$('lockBtn').addEventListener('click', () => lockNow());
+$('pinBtn').addEventListener('click', async () => {
+  if (PERSON === 'demo') { say('Sample figures do not have a PIN.'); return; }
+  const who = PERSON;
+  await metaSet('pin::' + who, null);
+  lockNow();
+  await askPin(who);
+  say('Choose a new PIN.');
+});
 $('demoSwitch').addEventListener('click', () => {
   confirmSheet({
     title: 'Start your own records',
@@ -1423,11 +1616,8 @@ $('demoSwitch').addEventListener('click', () => {
     yes: 'Start my own records',
     run: async () => {
       await delLedgerRows('demo');
-      LEDGER = 'personal';
-      await metaSet('ledger', 'personal');
-      say('Ready. Add your first expense when you are.');
-      await afterLedgerKnown();
-      go('home');
+      say('Sample figures cleared. Choose your name to carry on.');
+      lockNow();
     }
   });
 });
@@ -1448,15 +1638,18 @@ $('delMonthBtn').addEventListener('click', async () => {
 $('delAllBtn').addEventListener('click', () => {
   confirmSheet({
     title: 'Delete everything',
-    body: 'Every record, the monthly guide and every setting will be removed from this phone. '
-        + 'If you want a copy, save a backup first. This cannot be undone.',
+    body: 'Every record of yours, your monthly guide and your settings will be removed from '
+        + 'this phone. The other person\'s records are not touched. If you want a copy, save a '
+        + 'backup first. This cannot be undone.',
     yes: 'Delete everything',
     typed: 'delete',
     run: async () => {
-      await wipeAll();
-      say('Everything deleted.');
-      LEDGER = 'personal';
-      await metaSet('ledger', 'personal');
+      /* one person's data only. Wiping the whole store would take the other
+         person's records with it, which they never agreed to. */
+      await delLedgerRows(LEDGER);
+      for (const k of ['budget_c','lastCat','saves','imports','pendingImport'])
+        await pset(k, null);
+      say('Everything of yours has been deleted.');
       await afterLedgerKnown();
       go('home');
     }
@@ -1469,12 +1662,12 @@ const standalone = () => matchMedia('(display-mode: standalone)').matches || nav
 addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvent = e; refreshInstallUI(); });
 addEventListener('appinstalled', () => { installEvent = null; refreshInstallUI(); });
 async function bumpSaveCount(){
-  const n = ((await metaGet('saves')) || 0) + 1;
-  await metaSet('saves', n);
+  const n = ((await pget('saves')) || 0) + 1;
+  await pset('saves', n);
 }
 async function refreshInstallUI(){
   const dismissed = await metaGet('installDismissed').catch(() => false);
-  const saves = (await metaGet('saves').catch(() => 0)) || 0;
+  const saves = (await pget('saves').catch(() => 0)) || 0;
   const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
   const canPrompt = !!installEvent;
   const showable = !standalone() && (canPrompt || iOS);
@@ -1759,7 +1952,7 @@ async function sha256Hex(bytes){
 async function analyseStatement(bytes, password, profileId){
   const profile = PROFILES[profileId];
   const hash = await sha256Hex(bytes);
-  const seen = (await metaGet('imports')) || [];
+  const seen = (await pget('imports')) || [];
   if (seen.some(s => s.hash === hash))
     return {error: 'alreadyImported', when: (seen.find(s => s.hash === hash) || {}).at};
 
@@ -1849,7 +2042,7 @@ async function startAnalysis(bytes, password, profileId){
 async function savePending(){
   if (!IMP) return;
   try {
-    await metaSet('pendingImport', {
+    await pset('pendingImport', {
       analysis: IMP.analysis,
       pairs: IMP.pairs.map(p => ({statementTmp:p.statementTmp, manualId:p.manualId, gap:p.gap,
         score:p.score, ambiguous:p.ambiguous, choice:p.choice})),
@@ -1859,7 +2052,7 @@ async function savePending(){
   } catch (_) {}
 }
 async function resumePending(){
-  const p = await metaGet('pendingImport');
+  const p = await pget('pendingImport');
   if (!p || !p.analysis) return null;
   const manual = (await readLedger(LEDGER))
     .filter(r => r.source === 'manual' && r.state === 'provisional' && r.txType === 'expense');
@@ -1876,7 +2069,7 @@ async function resumePending(){
   };
   return p;
 }
-const clearPending = () => metaSet('pendingImport', null).catch(() => {});
+const clearPending = () => pset('pendingImport', null).catch(() => {});
 
 function summaryCounts(){
   const rows = IMP.analysis.rows;
@@ -1935,10 +2128,10 @@ async function commitImport(){
   for (const g of IMP.groups) {
     if (g.done && g.category) await learnRule(g.key, g.label, g.category);
   }
-  const seen = (await metaGet('imports')) || [];
+  const seen = (await pget('imports')) || [];
   seen.push({hash: a.hash, bank: a.profileId, period: a.period,
     lines: a.rows.length, at: new Date().toISOString(), batchId});
-  await metaSet('imports', seen);
+  await pset('imports', seen);
   await clearPending();
   const added = a.rows.length, matched = Object.keys(matchByTmp).length;
   IMP = null;
@@ -1964,11 +2157,11 @@ function impErrorText(a){
 }
 
 async function renderStatementScreen(){
-  const pend = await metaGet('pendingImport').catch(() => null);
+  const pend = await pget('pendingImport').catch(() => null);
   $('impResume').hidden = !pend;
   if (pend) $('impResumeText').textContent =
     `${pend.analysis.rows.length} lines from ${pend.analysis.period} are waiting for you to finish.`;
-  const imports = (await metaGet('imports')) || [];
+  const imports = (await pget('imports')) || [];
   $('impHistory').innerHTML = imports.length
     ? imports.slice().reverse().map(i => `
       <div class="tx" style="cursor:default">
@@ -1987,7 +2180,7 @@ $('impPick').addEventListener('click', () => { $('impFile').value = ''; $('impFi
 $('impFile').addEventListener('change', async e => {
   const file = e.target.files && e.target.files[0];
   if (!file) return;
-  if (LEDGER !== 'personal') { say('Start your own records before bringing in a statement.'); return; }
+  if (PERSON === 'demo') { say('Sign in as yourself before bringing in a statement.'); return; }
   try {
     pendingBytes = new Uint8Array(await file.arrayBuffer());
     pendingPw = null;
@@ -2215,6 +2408,16 @@ if (location.search.includes('selftest')) setTimeout(async () => {
   const root = document.documentElement;
   const started = Date.now();
   try {
+    /* The app now opens on the lock screen, so the harness signs itself in as a
+       person WITHOUT setting or reading a PIN. It must never leave a PIN behind. */
+    if (!PERSON) {
+      PERSON = 'thulaib'; LEDGER = 'p:thulaib';
+      $('firstrun').classList.remove('on');
+      await afterLedgerKnown();
+    }
+    ck('the app opens locked until someone chooses a name',
+      typeof openLock === 'function' && PEOPLE.length === 2,
+      PEOPLE.map(p => p.name).join(' and '));
     /* money */
     ck('money: 123456700c reads 1,234,567', fmt(123456700) === '1,234,567', fmt(123456700));
     ck('money: cents kept when nonzero', fmt(150) === '1.50', fmt(150));
@@ -2295,15 +2498,61 @@ if (location.search.includes('selftest')) setTimeout(async () => {
       smalls.slice(0,3).map(b => (b.id || b.className) + ' ' + Math.round(b.getBoundingClientRect().width)
         + 'x' + Math.round(b.getBoundingClientRect().height)).join('; '));
 
-    /* ledger isolation, the trust bug */
+    /* ── TWO PEOPLE ON ONE PHONE. The isolation is the whole point. ── */
+    const savedPerson = PERSON, savedLedger = LEDGER;
+    const sRow = makeTx({amt_c: 777700, merchant:'__shiara probe__', category:'other', ledger:'p:shiara'});
+    const tRow = makeTx({amt_c: 888800, merchant:'__thulaib probe__', category:'other', ledger:'p:thulaib'});
+    await putMany([sRow, tRow]);
+    const sMonth = await readMonth('p:shiara|' + curMonth());
+    const tMonth = await readMonth('p:thulaib|' + curMonth());
+    ck('people: Shiara cannot see Thulaib records',
+      sMonth.some(r => r.id === sRow.id) && !sMonth.some(r => r.id === tRow.id));
+    ck('people: Thulaib cannot see Shiara records',
+      tMonth.some(r => r.id === tRow.id) && !tMonth.some(r => r.id === sRow.id));
+    /* a backup must carry ONE person's records, never both */
+    PERSON = 'shiara'; LEDGER = 'p:shiara';
+    const sBackup = await buildBackup();
+    PERSON = 'thulaib'; LEDGER = 'p:thulaib';
+    const tBackup = await buildBackup();
+    ck('people: a backup carries only the person who asked for it',
+      sBackup.transactions.some(r => r.id === sRow.id)
+      && !sBackup.transactions.some(r => r.id === tRow.id)
+      && tBackup.transactions.some(r => r.id === tRow.id)
+      && !tBackup.transactions.some(r => r.id === sRow.id));
+    /* per-person settings must not leak either */
+    PERSON = 'shiara'; await pset('budget_c', 5000000);
+    PERSON = 'thulaib'; const tGuide = await pget('budget_c');
+    PERSON = 'shiara'; const sGuide = await pget('budget_c');
+    ck('people: a monthly guide belongs to one person only',
+      sGuide === 5000000 && tGuide !== 5000000, 'shiara ' + sGuide + ', thulaib ' + tGuide);
+    await metaSet(pk('budget_c'), null);
+    /* deleting one person leaves the other alone */
+    PERSON = 'shiara'; LEDGER = 'p:shiara';
+    await delLedgerRows('p:shiara');
+    ck('people: deleting one person does not touch the other',
+      (await countLedger('p:shiara')) === 0 && (await countLedger('p:thulaib')) > 0);
+    await delMany([tRow.id]);
+    PERSON = savedPerson; LEDGER = savedLedger;
+    ck('people: the harness gave the person back', PERSON === savedPerson && LEDGER === savedLedger);
+
+    /* a PIN is stored as a salted hash, never as the number itself */
+    const h1 = await pinHash('thulaib', '2468');
+    const h2 = await pinHash('thulaib', '2468');
+    const h3 = await pinHash('shiara', '2468');
+    ck('PIN: the same PIN hashes the same way twice', h1 === h2 && h1.length === 64);
+    ck('PIN: the same numbers give different people different hashes', h1 !== h3);
+    ck('PIN: no PIN digits are stored anywhere in the page source',
+      !/pin\s*[:=]\s*['"]\d{4}['"]/i.test(document.documentElement.innerHTML));
+
+    /* ledger isolation, the original trust bug */
     const dRow = makeTx({amt_c: 999900, merchant:'__demo probe__', category:'other', ledger:'demo'});
-    const pRow = makeTx({amt_c: 111100, merchant:'__personal probe__', category:'other', ledger:'personal'});
+    const pRow = makeTx({amt_c: 111100, merchant:'__personal probe__', category:'other', ledger:LEDGER});
     await putMany([dRow, pRow]);
-    const pm = await readMonth('personal|' + curMonth());
+    const pm = await readMonth(LEDGER + '|' + curMonth());
     const dm = await readMonth('demo|' + curMonth());
-    ck('ledgers never mix: personal month excludes demo rows',
+    ck('ledgers never mix: a person month excludes demo rows',
       pm.some(r => r.id === pRow.id) && !pm.some(r => r.id === dRow.id));
-    ck('ledgers never mix: demo month excludes personal rows',
+    ck('ledgers never mix: demo month excludes a person rows',
       dm.some(r => r.id === dRow.id) && !dm.some(r => r.id === pRow.id));
     const backup = await buildBackup();
     ck('a backup never carries sample figures',
@@ -2327,7 +2576,7 @@ if (location.search.includes('selftest')) setTimeout(async () => {
     $('dCats').querySelector('[data-c="food"]').click();
     ck('detail edits a draft, not the record', pRow.category === 'other' && draft.category === 'food');
     $('detClose').click();
-    const stillThere = (await readMonth('personal|' + curMonth())).find(r => r.id === pRow.id);
+    const stillThere = (await readMonth(LEDGER + '|' + curMonth())).find(r => r.id === pRow.id);
     ck('closing detail without saving leaves the stored record alone', stillThere.category === 'other');
 
     /* future dates refused */
@@ -2381,9 +2630,9 @@ if (location.search.includes('selftest')) setTimeout(async () => {
     /* A check must CREATE the state it needs and put it back. A walked import left
        an entry in the registry, and the re-import guard then failed this whole
        block, which is a check depending on what somebody else left behind. */
-    const importsBefore = haveFixtures ? ((await metaGet('imports')) || []) : null;
-    const pendingBefore = haveFixtures ? ((await metaGet('pendingImport')) || null) : null;
-    if (haveFixtures) { await metaSet('imports', []); await metaSet('pendingImport', null); }
+    const importsBefore = haveFixtures ? ((await pget('imports')) || []) : null;
+    const pendingBefore = haveFixtures ? ((await pget('pendingImport')) || null) : null;
+    if (haveFixtures) { await pset('imports', []); await pset('pendingImport', null); }
 
     if (haveFixtures) {
       /* dictionary precedence: the specific pattern must beat the general one */
@@ -2501,7 +2750,7 @@ if (location.search.includes('selftest')) setTimeout(async () => {
       ck('duplicate fixture parses', !!dup.ok, dup.error || '');
       if (dup.ok) {
         const mkManual = (amt, merchant, date) =>
-          makeTx({amt_c: amt, merchant, category:'other', date, ledger:'personal'});
+          makeTx({amt_c: amt, merchant, category:'other', date, ledger:LEDGER});
         const manual = [
           mkManual(348025, 'Keells Super', '2026-08-03'),   /* same day, same amount */
           mkManual(234000, 'Uber Eats', '2026-08-03'),      /* one day out */
@@ -2570,17 +2819,17 @@ if (location.search.includes('selftest')) setTimeout(async () => {
           (await countLedger('__imp')) === 0 && LEDGER === prevLedger);
       }
       /* put the store back exactly as it was found */
-      await metaSet('imports', importsBefore);
-      await metaSet('pendingImport', pendingBefore);
+      await pset('imports', importsBefore);
+      await pset('pendingImport', pendingBefore);
       IMP = null;
       ck('the harness restored the import registry it borrowed',
-        JSON.stringify((await metaGet('imports')) || []) === JSON.stringify(importsBefore));
+        JSON.stringify((await pget('imports')) || []) === JSON.stringify(importsBefore));
     }
 
     /* clean the probes, leave the store as it was found */
     await delMany([dRow.id, pRow.id]);
     ck('probe rows cleaned up',
-      !(await readMonth('personal|' + curMonth())).some(r => r.id === pRow.id));
+      !(await readMonth(LEDGER + '|' + curMonth())).some(r => r.id === pRow.id));
   } catch (e) {
     R.push({name:'harness threw: ' + (e && e.message), pass:false, detail:String(e && e.stack || '').slice(0,160)});
   }
