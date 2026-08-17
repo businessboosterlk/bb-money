@@ -358,26 +358,45 @@ input[type=file]{width:100%;font-size:var(--fs-sm)}
 <!-- ══════════ STATEMENT ══════════ -->
 <section class="screen" id="s-stmt" aria-labelledby="stmtH">
   <h1 id="stmtH">Bank statement</h1>
-  <p class="sub">Not available yet.</p>
-  <div class="card">
-    <h2 style="margin-bottom:8px">What it will do</h2>
-    <div class="catrow" style="cursor:default;align-items:flex-start;padding:9px 0">
-      <svg class="ic sm" style="margin-top:2px" aria-hidden="true"><use href="#i-tick"/></svg>
-      <span class="nm" style="font-weight:400;font-size:14px">Read the PDF your bank sends, on this phone, with nothing leaving the device.</span>
-    </div>
-    <div class="catrow" style="cursor:default;align-items:flex-start;padding:9px 0">
-      <svg class="ic sm" style="margin-top:2px" aria-hidden="true"><use href="#i-tick"/></svg>
-      <span class="nm" style="font-weight:400;font-size:14px">Ask you about the few lines it cannot place, not every line.</span>
-    </div>
-    <div class="catrow" style="cursor:default;align-items:flex-start;padding:9px 0;border-bottom:0">
-      <svg class="ic sm" style="margin-top:2px" aria-hidden="true"><use href="#i-tick"/></svg>
-      <span class="nm" style="font-weight:400;font-size:14px">Match what you added by hand, and never delete it.</span>
-    </div>
+  <p class="sub">Read on this phone. Nothing is uploaded.</p>
+
+  <div class="card" id="impResume" hidden>
+    <h2>Carry on where you left off</h2>
+    <p class="note" style="margin-top:2px" id="impResumeText"></p>
+    <div style="height:12px"></div>
+    <button class="btn" id="impResumeGo">Carry on</button>
+    <div style="height:8px"></div>
+    <button class="btn quiet" id="impResumeDrop">Discard it</button>
   </div>
+
   <div class="card">
-    <p class="muted" style="font-size:14px">Commercial Bank is being prepared first. A bank appears here
-    only once a real statement from it has been read correctly. Until then your records stay marked
-    unreconciled, and nothing is lost by waiting.</p>
+    <h2>Bring in a statement</h2>
+    <p class="note" style="margin-top:2px">Pick the PDF your bank emailed you. If it is password
+    protected, you will be asked for the password here and it is never saved.</p>
+    <div style="height:12px"></div>
+    <button class="btn" id="impPick">
+      <svg class="ic sm" aria-hidden="true"><use href="#i-up"/></svg>Choose a PDF</button>
+    <input type="file" id="impFile" accept="application/pdf,.pdf" hidden>
+    <p class="note">Commercial Bank is the profile in this version. It has been built to the layout and
+    proven against test files, but not yet against a real Commercial Bank statement, so read the lines
+    before you add them. Other banks follow as real samples arrive.</p>
+  </div>
+
+  <div class="card info" id="impFlag" hidden>
+    <svg class="ic" style="color:var(--warn-ink)" aria-hidden="true"><use href="#i-warn"/></svg>
+    <p id="impFlagText"></p>
+  </div>
+
+  <div class="sect">
+    <div class="shead"><h2>Statements brought in</h2></div>
+    <div id="impHistory"></div>
+  </div>
+
+  <div class="card" style="margin-top:18px">
+    <h2>What it does not do</h2>
+    <p class="note" style="margin-top:2px">A scanned statement, a photograph of a page, cannot be read.
+    Ask your bank for the text PDF, which is the one they email. Reading text messages is not possible
+    in an app that lives in the browser.</p>
   </div>
 </section>
 
@@ -537,6 +556,39 @@ input[type=file]{width:100%;font-size:var(--fs-sm)}
   </div></div>
 </div>
 
+<!-- ══════════ STATEMENT PASSWORD ══════════ -->
+<div class="sheet" id="pwSheet" role="dialog" aria-modal="true" aria-labelledby="pwTitle">
+  <div class="shead"><div class="col">
+    <b id="pwTitle">This statement is locked</b>
+    <button class="x" id="pwClose" aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div></div>
+  <form class="sbody" id="pwForm"><div class="col">
+    <div class="card info" style="margin-top:8px">
+      <svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg>
+      <p>The password is used here, on this phone, to open the file. It is not saved anywhere
+      and it is forgotten the moment the statement has been read.</p>
+    </div>
+    <p class="note" id="pwWrong" hidden style="color:#8a3324;font-weight:650">That password did not open the file. Try again.</p>
+    <label for="pwInput">Password</label>
+    <input type="text" id="pwInput" autocomplete="off" autocapitalize="characters" spellcheck="false"
+      enterkeyhint="go" placeholder="Often your NIC or phone number">
+    <div style="height:16px"></div>
+    <button class="btn" type="submit">Open the statement</button>
+  </div></form>
+</div>
+
+<!-- ══════════ STATEMENT REVIEW ══════════ -->
+<div class="sheet" id="revSheet" role="dialog" aria-modal="true" aria-labelledby="revTitle">
+  <div class="shead"><div class="col">
+    <b id="revTitle">Check the statement</b>
+    <button class="x" id="revClose" aria-label="Finish later"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div></div>
+  <div class="sbody"><div class="col" id="revBody"></div></div>
+  <div class="sfoot"><div class="col">
+    <button class="btn" id="revCommit">Add to my records</button>
+  </div></div>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div class="sr" id="live" role="status" aria-live="polite"></div>
 <div id="stResults"></div>
@@ -544,8 +596,8 @@ input[type=file]{width:100%;font-size:var(--fs-sm)}
 <script>
 (() => {
 'use strict';
-const APP = 'BB Money', APP_VER = '0.2.0', SCHEMA = 2;
-const DB_NAME = 'bbmoney', DB_VER = 2;
+const APP = 'BB Money', APP_VER = '0.3.0', SCHEMA = 3;
+const DB_NAME = 'bbmoney', DB_VER = 3;
 
 /* ══════════ helpers ══════════ */
 const $ = id => document.getElementById(id);
@@ -625,6 +677,10 @@ function openDB(){
       const st = d.objectStoreNames.contains('tx')
         ? tr.objectStore('tx') : d.createObjectStore('tx', {keyPath:'id'});
       if (!d.objectStoreNames.contains('meta')) d.createObjectStore('meta', {keyPath:'k'});
+      /* merchant rules learned on this phone. The user's correction always beats
+         the shipped dictionary, so it lives in its own store keyed on the raw
+         statement string. */
+      if (!d.objectStoreNames.contains('rules')) d.createObjectStore('rules', {keyPath:'raw'});
       const idx = (n, kp) => { if (!st.indexNames.contains(n)) st.createIndex(n, kp); };
       idx('by_mk','mk'); idx('by_ledger','ledger'); idx('by_cat','category');
       idx('by_norm','normMerchant'); idx('by_state','state'); idx('by_created','createdAt');
@@ -733,7 +789,11 @@ function makeTx(o){
     createdAt: new Date().toISOString(),
   }, o, {date, month: date.slice(0,7), ledger, mk: ledger + '|' + date.slice(0,7)});
 }
-const isExpense = r => r.txType === 'expense' && r.state !== 'excluded';
+/* What counts as money spent. 'matched' is deliberately excluded: it means a hand
+   typed record was superseded by the bank's own line, which is the record that
+   counts. Counting both would double the month. */
+const COUNTED = new Set(['provisional', 'authoritative', 'unresolved']);
+const isExpense = r => r.txType === 'expense' && COUNTED.has(r.state);
 const sum = rs => rs.reduce((s, r) => s + r.amt_c, 0);
 const byCat = rs => { const o = {}; rs.forEach(r => o[r.category] = (o[r.category] || 0) + r.amt_c); return o; };
 
@@ -800,7 +860,9 @@ async function afterLedgerKnown(){
   const bud = await metaGet('budget_c');
   $('budgetIn').value = bud ? fmt(bud) : '';
   viewMonth = curMonth(); histMonth = curMonth();
+  await loadRules();
   await renderAll();
+  await renderStatementScreen();
   await refreshInstallUI();
   refreshPersistUI();
 }
@@ -1439,6 +1501,660 @@ $('installLater').addEventListener('click', async () => {
   try { await metaSet('installDismissed', true); } catch (_) {}
 });
 
+/* ══════════════════════════════════════════════════════════════════════════
+   STATEMENT IMPORT
+   The settled monthly statement is the source of truth. Everything here runs on
+   this phone: pdf.js is a file in vendor/, the same as an icon, and no statement
+   byte is ever sent anywhere. The password is held in a local variable for the
+   length of one parse and never written to the store. The PDF bytes are dropped
+   as soon as the text is out.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Merchant dictionary. PRECEDENCE MATTERS: the longer, more specific pattern must
+   win, or UBER matches before UBER *EATS and every meal becomes a taxi. Entries
+   are sorted by priority, then by pattern length, before matching. */
+const DICT = [
+  /* food and delivery */
+  ['UBER *EATS','Uber Eats','food',10], ['UBEREATS','Uber Eats','food',10],
+  ['PICKME FOOD','PickMe Food','food',10], ['PICKME*FOOD','PickMe Food','food',10],
+  ['KFC','KFC','food',5], ['PIZZA HUT','Pizza Hut','food',5], ['DOMINOS','Dominos','food',5],
+  ['MCDONALD','McDonalds','food',5], ['BURGER KING','Burger King','food',5],
+  ['BARISTA','Barista','food',5], ['JAVA LOUNGE','Java Lounge','food',5],
+  /* groceries */
+  ['KEELLS','Keells','groc',5], ['CARGILLS','Cargills Food City','groc',5],
+  ['FOOD CITY','Cargills Food City','groc',5], ['ARPICO','Arpico','groc',5],
+  ['SPAR','Spar','groc',5], ['GLOMARK','Glomark','groc',5],
+  ['SATHOSA','Sathosa','groc',5], ['LAUGFS SUPER','Laugfs Super','groc',6],
+  /* transport */
+  ['PICKME','PickMe','ride',5], ['UBER','Uber','ride',4],
+  ['KANGAROO CAB','Kangaroo Cabs','ride',5], ['CEYPETCO','Ceypetco fuel','ride',5],
+  ['IOC','IOC fuel','ride',5], ['LANKA IOC','IOC fuel','ride',6],
+  ['EXPRESSWAY','Expressway toll','ride',5], ['SRI LANKA RAILWAY','Railways','ride',5],
+  /* bills */
+  ['DIALOG','Dialog','bills',5], ['MOBITEL','Mobitel','bills',5], ['SLT','SLT','bills',5],
+  ['HUTCH','Hutch','bills',5], ['AIRTEL','Airtel','bills',5],
+  ['CEB','CEB','bills',5], ['LECO','LECO','bills',5],
+  ['NWSDB','Water Board','bills',5], ['WATER BOARD','Water Board','bills',5],
+  /* shopping */
+  ['DARAZ','Daraz','shop',5], ['ODEL','Odel','shop',5], ['KAPRUKA','Kapruka','shop',5],
+  ['SINGER','Singer','shop',5], ['ABANS','Abans','shop',5], ['SOFTLOGIC','Softlogic','shop',5],
+  /* family and health */
+  ['ASIRI','Asiri','fam',5], ['NAWALOKA','Nawaloka','fam',5], ['HEMAS','Hemas','fam',5],
+  ['PHARMAC','Pharmacy','fam',5], ['LANKA HOSPITAL','Lanka Hospitals','fam',5],
+];
+const DICT_SORTED = DICT.slice().sort((a, b) => (b[3] - a[3]) || (b[0].length - a[0].length));
+
+/* Lines that are not money moving. These get their own transaction type and are
+   never forced into a spending category. */
+const NOT_SPEND = [
+  [/\b(FUND TRANSFER|CEFT|SLIPS|STANDING ORDER|OWN ACCOUNT|TRANSFER TO|TRANSFER FROM)\b/, 'transfer'],
+  [/\b(ATM WDL|ATM WITHDRAWAL|CASH WITHDRAWAL)\b/, 'transfer'],
+  [/\b(SERVICE CHARGE|STAMP DUTY|COMMISSION|LEDGER FEE|SMS CHARGE|ANNUAL FEE|VAT ON)\b/, 'fee'],
+  [/\b(REVERSAL|REFUND|CHARGEBACK)\b/, 'refund'],
+];
+const normMerch = s => String(s || '').toUpperCase().replace(/\s+/g, ' ').trim();
+/* strip the trailing reference numbers that make every line look unique */
+const merchKey = s => normMerch(s)
+  .replace(/\b(REF|CARD ENDING|ORDER|TRIP)\b\.?\s*[#*]?\s*\d+/g, '')
+  .replace(/[#*]?\b\d{4,}\b/g, '')
+  .replace(/\s+/g, ' ').trim();
+
+let LEARNED = {};   /* raw key -> {merchant, category} , loaded at boot */
+async function loadRules(){
+  try { LEARNED = Object.fromEntries((await work('rules','readonly', t => {
+    const rq = t.objectStore('rules').getAll(); return () => rq.result || [];
+  })).map(r => [r.raw, r])); }
+  catch (_) { LEARNED = {}; }
+}
+async function learnRule(rawKey, merchant, category){
+  const row = {raw: rawKey, merchant, category, updatedAt: new Date().toISOString()};
+  LEARNED[rawKey] = row;
+  try { await work('rules','readwrite', t => { t.objectStore('rules').put(row); }); }
+  catch (_) {}
+}
+function classify(desc, isCredit){
+  const up = normMerch(desc), key = merchKey(desc);
+  for (const [re, type] of NOT_SPEND) {
+    if (re.test(up)) return {merchant: titleish(key), category: 'other', txType: type, confidence: 'high', key};
+  }
+  if (isCredit) return {merchant: titleish(key), category: 'other', txType: 'credit', confidence: 'high', key};
+  /* the phone's own correction always beats the shipped dictionary */
+  if (LEARNED[key]) return {merchant: LEARNED[key].merchant, category: LEARNED[key].category,
+    txType: 'expense', confidence: 'learned', key};
+  for (const [pat, merchant, category] of DICT_SORTED) {
+    if (up.includes(pat)) return {merchant, category, txType: 'expense', confidence: 'high', key};
+  }
+  return {merchant: titleish(key), category: 'other', txType: 'expense', confidence: 'low', key};
+}
+function titleish(s){
+  const t = String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  return t ? t.replace(/\b[a-z]/g, c => c.toUpperCase()).slice(0, 40) : 'Unnamed line';
+}
+
+/* ── bank profiles. A profile is only 'verified' once a REAL statement from that
+      bank has parsed correctly. Synthetic fixtures do not earn that word. ── */
+const PROFILES = {
+  commercial: {
+    id: 'commercial', name: 'Commercial Bank', verified: false,
+    match: /COMMERCIAL BANK OF CEYLON/i,
+    headerWords: {date: /^Date$/i, desc: /^Description$/i,
+      wd: /^(Withdrawals?|Debit)$/i, dep: /^(Deposits?|Credit)$/i, bal: /^Balance$/i},
+    skip: /^(COMMERCIAL BANK|Statement of Account|Account No|Statement Period|Page \d|CARRIED FORWARD|CLOSING BALANCE|BALANCE B\/F|BROUGHT FORWARD|Date$|Description$)/i,
+  },
+};
+const AMOUNT_RE = /^-?\d{1,3}(,\d{3})*\.\d{2}$|^-?\d+\.\d{2}$/;
+const MONTHS = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+function parseDate(s){
+  s = String(s || '').trim();
+  let m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  if (m) return `${m[3]}-${pad(+m[2])}-${pad(+m[1])}`;      /* day first, as SL banks print */
+  m = s.match(/^(\d{1,2})[\s\-]([A-Za-z]{3})[a-z]*[\s\-](\d{4})$/);
+  if (m && MONTHS[m[2].toLowerCase()]) return `${m[3]}-${pad(MONTHS[m[2].toLowerCase()])}-${pad(+m[1])}`;
+  return null;
+}
+const parseMoneyCents = s => {
+  const t = String(s || '').replace(/,/g, '').trim();
+  if (!AMOUNT_RE.test(String(s).trim())) return null;
+  const v = Math.round(parseFloat(t) * 100);
+  return Number.isFinite(v) ? Math.abs(v) : null;
+};
+
+/* pdf.js is loaded only when an import is actually attempted, from vendor/ */
+let pdfLibPromise = null;
+function loadPdfLib(){
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if (pdfLibPromise) return pdfLibPromise;
+  pdfLibPromise = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'vendor/pdf.min.js';
+    s.onload = () => {
+      if (!window.pdfjsLib) { rej(new Error('pdf library did not load')); return; }
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
+      res(window.pdfjsLib);
+    };
+    s.onerror = () => rej(new Error('pdf library missing'));
+    document.head.appendChild(s);
+  });
+  return pdfLibPromise;
+}
+
+const PW_NEEDED = 'PASSWORD_NEEDED', PW_WRONG = 'PASSWORD_WRONG';
+async function extractPages(bytes, password){
+  const lib = await loadPdfLib();
+  let doc;
+  try {
+    /* pdf.js takes OWNERSHIP of the array it is handed and detaches it, so a second
+       attempt on the same bytes reads an empty file. That turned one mistyped
+       password into a dead end. Always hand it a copy and keep the original. */
+    doc = await lib.getDocument(Object.assign({data: bytes.slice(0)},
+      password ? {password} : {})).promise;
+  } catch (e) {
+    const nm = (e && e.name) || '';
+    if (nm === 'PasswordException' || /password/i.test(e && e.message || '')) {
+      throw new Error(password ? PW_WRONG : PW_NEEDED);
+    }
+    throw e;
+  }
+  const pages = [];
+  for (let i = 1; i <= doc.numPages; i++) {
+    const pg = await doc.getPage(i);
+    const tc = await pg.getTextContent();
+    pages.push(tc.items.filter(it => String(it.str).trim()).map(it => ({
+      s: String(it.str).trim(),
+      x: it.transform[4], y: it.transform[5], w: it.width || 0,
+    })));
+  }
+  try { await doc.destroy(); } catch (_) {}
+  return pages;
+}
+
+function linesFrom(items){
+  const rows = [];
+  items.slice().sort((a, b) => b.y - a.y || a.x - b.x).forEach(it => {
+    const last = rows[rows.length - 1];
+    if (last && Math.abs(last.y - it.y) <= 2.6) { last.items.push(it); last.y = (last.y + it.y) / 2; }
+    else rows.push({y: it.y, items: [it]});
+  });
+  rows.forEach(r => r.items.sort((a, b) => a.x - b.x));
+  return rows;
+}
+function columnsFrom(lines, profile){
+  for (const ln of lines) {
+    const found = {};
+    ln.items.forEach(it => {
+      for (const k of ['date','desc','wd','dep','bal'])
+        if (profile.headerWords[k].test(it.s)) found[k] = it.x + it.w / 2;
+    });
+    if (found.date != null && found.desc != null &&
+        (found.wd != null || found.dep != null || found.bal != null)) {
+      return {anchors: found, y: ln.y};
+    }
+  }
+  return null;
+}
+function assignColumn(mid, anchors){
+  const order = ['date','desc','wd','dep','bal'].filter(k => anchors[k] != null);
+  let best = order[0], bestD = Infinity;
+  order.forEach(k => { const d = Math.abs(anchors[k] - mid); if (d < bestD) { bestD = d; best = k; } });
+  return best;
+}
+
+/* Reconstruct transaction rows from positioned text. Multi-line descriptions and
+   repeated mid-document headers are the two things that break a naive parser. */
+function rowsFromPages(pages, profile){
+  const out = [];
+  let anchors = null, unreadablePages = [];
+  pages.forEach((items, pi) => {
+    if (!items.length) { unreadablePages.push(pi + 1); return; }
+    const lines = linesFrom(items);
+    const hdr = columnsFrom(lines, profile);
+    if (hdr) anchors = hdr.anchors;
+    if (!anchors) return;
+    lines.forEach(ln => {
+      if (hdr && ln.y >= hdr.y) return;                        /* above the table */
+      const joined = ln.items.map(i => i.s).join(' ').trim();
+      if (profile.skip.test(joined)) return;
+      const cells = {date:[], desc:[], wd:[], dep:[], bal:[]};
+      ln.items.forEach(it => cells[assignColumn(it.x + it.w / 2, anchors)].push(it.s));
+      const dateStr = cells.date.join(' ').trim();
+      const date = parseDate(dateStr);
+      const desc = cells.desc.join(' ').trim();
+      const wd = parseMoneyCents(cells.wd.join('').trim());
+      const dep = parseMoneyCents(cells.dep.join('').trim());
+      const bal = parseMoneyCents(cells.bal.join('').trim());
+      if (!date && !wd && !dep) {
+        /* a continuation of the line above, not a transaction of its own */
+        const prev = out[out.length - 1];
+        if (prev && desc) prev.rawDesc = (prev.rawDesc + ' ' + desc).trim();
+        return;
+      }
+      if (!date) {
+        const prev = out[out.length - 1];
+        if (!prev) return;
+        out.push({date: prev.date, rawDesc: desc || prev.rawDesc, wd, dep, bal, page: pi + 1});
+        return;
+      }
+      if (!wd && !dep) {
+        /* dated line with no amount: description only, keep it attached */
+        const prev = out[out.length - 1];
+        if (prev && desc) prev.rawDesc = (prev.rawDesc + ' ' + desc).trim();
+        return;
+      }
+      out.push({date, rawDesc: desc, wd, dep, bal, page: pi + 1});
+    });
+  });
+  return {rows: out, unreadablePages};
+}
+
+async function sha256Hex(bytes){
+  const d = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/* ── the whole parse, from bytes to a reviewable batch ── */
+async function analyseStatement(bytes, password, profileId){
+  const profile = PROFILES[profileId];
+  const hash = await sha256Hex(bytes);
+  const seen = (await metaGet('imports')) || [];
+  if (seen.some(s => s.hash === hash))
+    return {error: 'alreadyImported', when: (seen.find(s => s.hash === hash) || {}).at};
+
+  const pages = await extractPages(bytes, password);
+  const textPages = pages.filter(p => p.length).length;
+  if (!textPages) return {error: 'needsOCR', pages: pages.length};
+
+  const allText = pages.flat().map(i => i.s).join(' ');
+  const looksRight = profile.match.test(allText);
+  const {rows, unreadablePages} = rowsFromPages(pages, profile);
+  if (!rows.length) return {error: 'noRows', looksRight, pages: pages.length};
+
+  const parsed = rows.map(r => {
+    const isCredit = !r.wd && !!r.dep;
+    const c = classify(r.rawDesc, isCredit);
+    return {
+      tmp: (crypto.randomUUID ? crypto.randomUUID() : 'p' + Math.random().toString(36).slice(2)),
+      date: r.date, amt_c: r.wd || r.dep, rawDesc: r.rawDesc,
+      normMerchant: c.merchant, merchant: c.merchant, category: c.category,
+      txType: c.txType, confidence: c.confidence, key: c.key, page: r.page,
+      credit: isCredit, decided: c.confidence !== 'low', include: true,
+    };
+  });
+  const months = [...new Set(parsed.map(r => r.date.slice(0, 7)))].sort();
+  return {
+    ok: true, hash, profileId, looksRight, unreadablePages,
+    period: months.length ? (months[0] === months[months.length - 1]
+      ? monthName(months[0]) : monthName(months[0]) + ' to ' + monthName(months[months.length - 1])) : '',
+    months, rows: parsed,
+  };
+}
+
+/* ── duplicate matching against hand typed records ── */
+const DAY_MS = 86400000;
+const dayGap = (a, b) => Math.round(Math.abs(new Date(a + 'T12:00:00') - new Date(b + 'T12:00:00')) / DAY_MS);
+function tokenScore(a, b){
+  const A = new Set(merchKey(a).split(' ').filter(w => w.length > 2));
+  const B = new Set(merchKey(b).split(' ').filter(w => w.length > 2));
+  if (!A.size || !B.size) return 0;
+  let hit = 0; A.forEach(w => { if (B.has(w)) hit++; });
+  return hit / Math.min(A.size, B.size);
+}
+function findDuplicates(statementRows, manualRows){
+  const pairs = [];
+  const takenManual = new Set();
+  statementRows.filter(r => r.txType === 'expense').forEach(sr => {
+    const cands = manualRows
+      .filter(m => !takenManual.has(m.id) && m.amt_c === sr.amt_c && dayGap(m.date, sr.date) <= 3)
+      .map(m => ({m, gap: dayGap(m.date, sr.date), score: tokenScore(m.merchant, sr.rawDesc)}))
+      .sort((a, b) => (b.score - a.score) || (a.gap - b.gap));
+    if (!cands.length) return;
+    const best = cands[0];
+    const ambiguous = cands.length > 1 && cands[1].score === best.score && cands[1].gap === best.gap;
+    takenManual.add(best.m.id);
+    pairs.push({
+      statementTmp: sr.tmp, manualId: best.m.id, manual: best.m, statement: sr,
+      gap: best.gap, score: best.score, ambiguous,
+      /* a same-day, same-merchant, same-amount pair is as certain as this gets */
+      choice: (!ambiguous && best.gap <= 1 && best.score >= 0.5) ? 'match' : 'unsure',
+    });
+  });
+  return pairs;
+}
+
+/* ── review state ── */
+let IMP = null;   /* {analysis, pairs, groups} */
+
+function buildGroups(analysis){
+  const low = analysis.rows.filter(r => r.txType === 'expense' && r.confidence === 'low');
+  const byKey = {};
+  low.forEach(r => (byKey[r.key] = byKey[r.key] || []).push(r));
+  return Object.entries(byKey).map(([key, rows]) => ({
+    key, rows, label: rows[0].merchant, category: 'other', done: false,
+  })).sort((a, b) => b.rows.length - a.rows.length);
+}
+
+async function startAnalysis(bytes, password, profileId){
+  const analysis = await analyseStatement(bytes, password, profileId);
+  if (analysis.error) return analysis;
+  const manual = (await readLedger(LEDGER))
+    .filter(r => r.source === 'manual' && r.state === 'provisional' && r.txType === 'expense');
+  IMP = {analysis, pairs: findDuplicates(analysis.rows, manual), groups: buildGroups(analysis)};
+  await savePending();
+  return analysis;
+}
+/* Finish later: the parsed rows are kept, the PDF bytes and the password are not. */
+async function savePending(){
+  if (!IMP) return;
+  try {
+    await metaSet('pendingImport', {
+      analysis: IMP.analysis,
+      pairs: IMP.pairs.map(p => ({statementTmp:p.statementTmp, manualId:p.manualId, gap:p.gap,
+        score:p.score, ambiguous:p.ambiguous, choice:p.choice})),
+      groups: IMP.groups.map(g => ({key:g.key, category:g.category, done:g.done})),
+      savedAt: new Date().toISOString(),
+    });
+  } catch (_) {}
+}
+async function resumePending(){
+  const p = await metaGet('pendingImport');
+  if (!p || !p.analysis) return null;
+  const manual = (await readLedger(LEDGER))
+    .filter(r => r.source === 'manual' && r.state === 'provisional' && r.txType === 'expense');
+  const byId = Object.fromEntries(manual.map(m => [m.id, m]));
+  const byTmp = Object.fromEntries(p.analysis.rows.map(r => [r.tmp, r]));
+  IMP = {
+    analysis: p.analysis,
+    pairs: (p.pairs || []).filter(x => byId[x.manualId] && byTmp[x.statementTmp])
+      .map(x => Object.assign({}, x, {manual: byId[x.manualId], statement: byTmp[x.statementTmp]})),
+    groups: buildGroups(p.analysis).map(g => {
+      const saved = (p.groups || []).find(s => s.key === g.key);
+      return saved ? Object.assign(g, {category: saved.category, done: saved.done}) : g;
+    }),
+  };
+  return p;
+}
+const clearPending = () => metaSet('pendingImport', null).catch(() => {});
+
+function summaryCounts(){
+  const rows = IMP.analysis.rows;
+  const spend = rows.filter(r => r.txType === 'expense');
+  const notSpend = rows.filter(r => r.txType !== 'expense');
+  const matched = IMP.pairs.filter(p => p.choice === 'match').length;
+  const undecidedGroups = IMP.groups.filter(g => !g.done).length;
+  const unsurePairs = IMP.pairs.filter(p => p.choice === 'unsure').length;
+  return {
+    lines: rows.length,
+    recognised: spend.filter(r => r.confidence !== 'low').length,
+    notSpend: notSpend.length,
+    matched,
+    decisions: undecidedGroups + unsurePairs,
+    groups: undecidedGroups, unsurePairs,
+  };
+}
+
+/* ── commit ── */
+async function commitImport(){
+  const a = IMP.analysis;
+  const batchId = 'imp-' + a.hash.slice(0, 12);
+  const catByKey = {};
+  IMP.groups.forEach(g => { if (g.done) catByKey[g.key] = g.category; });
+  const matchByTmp = {};
+  IMP.pairs.forEach(p => { if (p.choice === 'match') matchByTmp[p.statementTmp] = p; });
+
+  const toPut = [];
+  a.rows.forEach(r => {
+    const pair = matchByTmp[r.tmp];
+    const cat = catByKey[r.key] || r.category;
+    const rec = makeTx({
+      amt_c: r.amt_c, date: r.date, category: cat,
+      merchant: (pair && pair.manual.merchant) || r.merchant,
+      rawDesc: r.rawDesc, normMerchant: r.normMerchant,
+      note: pair && pair.manual.note ? pair.manual.note : '',
+      source: 'statement',
+      state: pair ? 'authoritative' : (IMP.pairs.some(p => p.statementTmp === r.tmp && p.choice === 'unsure')
+        ? 'unresolved' : 'authoritative'),
+      txType: r.txType,
+      importBatch: batchId, bankProfile: a.profileId,
+      matchId: pair ? pair.manualId : null,
+      confidence: r.confidence,
+      ledger: LEDGER,
+    });
+    toPut.push(rec);
+    if (pair) {
+      /* NEVER delete what the person typed. It becomes metadata on the bank's own
+         line and is marked superseded so the month is not counted twice. */
+      toPut.push(Object.assign({}, pair.manual, {state: 'matched', matchId: rec.id}));
+    }
+  });
+
+  await putMany(toPut);
+  /* learn the corrections, so the same line is recognised next month */
+  for (const g of IMP.groups) {
+    if (g.done && g.category) await learnRule(g.key, g.label, g.category);
+  }
+  const seen = (await metaGet('imports')) || [];
+  seen.push({hash: a.hash, bank: a.profileId, period: a.period,
+    lines: a.rows.length, at: new Date().toISOString(), batchId});
+  await metaSet('imports', seen);
+  await clearPending();
+  const added = a.rows.length, matched = Object.keys(matchByTmp).length;
+  IMP = null;
+  return {added, matched};
+}
+
+/* ══════════ import UI ══════════ */
+let pendingBytes = null, pendingPw = null;
+
+function impErrorText(a){
+  if (a.error === 'alreadyImported')
+    return 'This exact file has already been brought in' + (a.when ? ' on ' + a.when.slice(0, 10) : '')
+      + ', so nothing was added. A month cannot be counted twice.';
+  if (a.error === 'needsOCR')
+    return 'This statement is a scan, a picture of a page rather than text. Reading scans is not '
+      + 'something this version does. Ask your bank for the text PDF, which is what they email.';
+  if (a.error === 'noRows')
+    return a.looksRight
+      ? 'This looks like the right bank, but the table did not come out in a shape this version can read. '
+        + 'Nothing was added. Keeping this file would help the next version handle it.'
+      : 'No transaction table was found in this file, so nothing was added.';
+  return 'This file could not be read, so nothing was added.';
+}
+
+async function renderStatementScreen(){
+  const pend = await metaGet('pendingImport').catch(() => null);
+  $('impResume').hidden = !pend;
+  if (pend) $('impResumeText').textContent =
+    `${pend.analysis.rows.length} lines from ${pend.analysis.period} are waiting for you to finish.`;
+  const imports = (await metaGet('imports')) || [];
+  $('impHistory').innerHTML = imports.length
+    ? imports.slice().reverse().map(i => `
+      <div class="tx" style="cursor:default">
+        <span class="ico"><svg class="ic sm" aria-hidden="true"><use href="#i-doc"/></svg></span>
+        <span class="who"><b>${esc(i.period || 'Statement')}</b>
+          <span>${i.lines} lines, brought in ${esc(String(i.at).slice(0, 10))}</span></span>
+      </div>`).join('')
+    : '<p class="empty">No statement has been brought in yet.</p>';
+  const unres = (await readMonth(LEDGER + '|' + curMonth())).filter(r => r.state === 'unresolved').length;
+  $('impFlag').hidden = !unres;
+  if (unres) $('impFlagText').textContent =
+    `${unres} record${unres === 1 ? '' : 's'} may be the same as something you typed. They are all being counted for now.`;
+}
+
+$('impPick').addEventListener('click', () => { $('impFile').value = ''; $('impFile').click(); });
+$('impFile').addEventListener('change', async e => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  if (LEDGER !== 'personal') { say('Start your own records before bringing in a statement.'); return; }
+  try {
+    pendingBytes = new Uint8Array(await file.arrayBuffer());
+    pendingPw = null;
+    await runAnalysis();
+  } catch (err) { showError('That file could not be opened.', err); }
+});
+async function runAnalysis(){
+  if (!pendingBytes) return;
+  $('impPick').disabled = true;
+  say('Reading the statement on this phone.');
+  try {
+    const a = await startAnalysis(pendingBytes, pendingPw, 'commercial');
+    if (a.error) { showError(impErrorText(a)); dropBytes(); return; }
+    dropBytes();
+    openReview();
+  } catch (err) {
+    const m = err && err.message;
+    if (m === PW_NEEDED || m === PW_WRONG) {
+      $('pwWrong').hidden = m !== PW_WRONG;
+      $('pwInput').value = '';
+      openSheet('pwSheet', 'pwInput');
+      return;
+    }
+    showError('This file could not be read, so nothing was added.', err);
+    dropBytes();
+  } finally { $('impPick').disabled = false; }
+}
+/* the statement bytes and the password leave memory as soon as the text is out */
+function dropBytes(){ pendingBytes = null; pendingPw = null; }
+$('pwForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  pendingPw = $('pwInput').value;
+  $('pwInput').value = '';
+  closeSheet('pwSheet');
+  await runAnalysis();
+});
+$('pwClose').addEventListener('click', () => { closeSheet('pwSheet'); dropBytes(); });
+$('impResumeGo').addEventListener('click', async () => {
+  const p = await resumePending();
+  if (!p) { say('That import is no longer available.'); await renderStatementScreen(); return; }
+  openReview();
+});
+$('impResumeDrop').addEventListener('click', () => {
+  confirmSheet({
+    title: 'Discard this import',
+    body: 'The lines read from that statement will be forgotten. Nothing has been added to your records, '
+        + 'and the file on your phone is untouched, so you can bring it in again later.',
+    yes: 'Discard it',
+    run: async () => { IMP = null; await clearPending(); await renderStatementScreen(); say('Discarded.'); }
+  });
+});
+
+function openReview(){ paintReview(); openSheet('revSheet'); }
+function paintReview(){
+  const a = IMP.analysis, c = summaryCounts();
+  const prof = PROFILES[a.profileId];
+  const warn = [];
+  if (!a.looksRight) warn.push('This does not read like a ' + prof.name
+    + ' statement, so the columns may have been guessed. Check a few lines before adding them.');
+  if (a.unreadablePages && a.unreadablePages.length) warn.push('Page '
+    + a.unreadablePages.join(', ') + ' had no readable text and was skipped.');
+
+  $('revBody').innerHTML = `
+    <div class="summary" style="padding-top:10px">
+      <div class="lab">${esc(a.period)}</div>
+      <div class="fig"><span class="amt">${c.lines}</span><span class="cur">lines read</span></div>
+      <div class="lines">
+        <p><b>${c.recognised}</b> recognised on their own.</p>
+        <p><b>${c.notSpend}</b> transfers, fees and payments in, kept out of spending.</p>
+        <p><b>${c.matched}</b> matched to something you typed.</p>
+        <p><b>${c.decisions}</b> ${c.decisions === 1 ? 'thing needs' : 'things need'} you.</p>
+      </div>
+    </div>
+    ${warn.map(w => `<div class="card info" style="margin-top:12px">
+      <svg class="ic" style="color:var(--warn-ink)" aria-hidden="true"><use href="#i-warn"/></svg>
+      <p>${esc(w)}</p></div>`).join('')}
+    ${!prof.verified ? `<div class="card info" style="margin-top:12px">
+      <svg class="ic" style="color:var(--warn-ink)" aria-hidden="true"><use href="#i-warn"/></svg>
+      <p>${prof.name} has not been checked against a real statement yet, only against test files.
+      Read the lines below before you add them.</p></div>` : ''}
+
+    ${IMP.groups.filter(g => !g.done).length ? `<div class="sect">
+      <div class="shead"><h2>Which category?</h2><span class="faint">grouped, so one tap covers all</span></div>
+      ${IMP.groups.filter(g => !g.done).map((g, i) => `
+        <div style="padding:12px 0;border-bottom:1px solid var(--line)">
+          <p style="font-size:14px;font-weight:650">${esc(g.label)}</p>
+          <p class="faint" style="margin-bottom:8px">${g.rows.length} line${g.rows.length === 1 ? '' : 's'},
+            LKR ${fmt(g.rows.reduce((s, r) => s + r.amt_c, 0))} &middot; ${esc(g.rows[0].rawDesc.slice(0, 44))}</p>
+          <div class="chips" data-group="${esc(g.key)}">
+            ${CATS.map(([k,, name]) => `<button type="button" class="chip" data-gk="${esc(g.key)}" data-c="${k}"
+              aria-pressed="false">${name}</button>`).join('')}
+          </div>
+        </div>`).join('')}
+    </div>` : ''}
+
+    ${IMP.pairs.length ? `<div class="sect">
+      <div class="shead"><h2>Possible repeats</h2><span class="faint">nothing you typed is deleted</span></div>
+      ${IMP.pairs.map((p, i) => `
+        <div style="padding:12px 0;border-bottom:1px solid var(--line)">
+          <p style="font-size:14px;font-weight:650">LKR ${fmt(p.statement.amt_c)}</p>
+          <p class="faint">You typed ${esc(p.manual.merchant || 'an expense')} on ${esc(p.manual.date)}.
+            The bank shows ${esc(p.statement.rawDesc.slice(0, 40))} on ${esc(p.statement.date)}.</p>
+          <div class="chips" style="grid-template-columns:repeat(3,1fr);margin-top:8px">
+            <button type="button" class="chip" data-pair="${i}" data-choice="match"
+              aria-pressed="${p.choice === 'match'}">Same one</button>
+            <button type="button" class="chip" data-pair="${i}" data-choice="both"
+              aria-pressed="${p.choice === 'both'}">Keep both</button>
+            <button type="button" class="chip" data-pair="${i}" data-choice="unsure"
+              aria-pressed="${p.choice === 'unsure'}">Not sure</button>
+          </div>
+        </div>`).join('')}
+    </div>` : ''}
+
+    <div class="sect">
+      <div class="shead"><h2>Every line</h2><span class="faint">${c.lines} read</span></div>
+      ${a.rows.map(r => `
+        <div class="tx" style="cursor:default">
+          <span class="ico"><svg class="ic sm" aria-hidden="true"><use href="#${catOf(r.category).icon}"/></svg></span>
+          <span class="who"><b>${esc(r.merchant)}</b>
+            <span>${esc(r.date)} &middot; ${r.txType === 'expense' ? esc(catOf(r.category).name)
+              : esc(r.txType === 'credit' ? 'money in' : r.txType)}${r.confidence === 'low' ? ' &middot; needs a category' : ''}</span></span>
+          <span class="amt">LKR ${fmt(r.amt_c)}</span>
+        </div>`).join('')}
+    </div>`;
+  $('revCommit').textContent = c.decisions
+    ? `${c.decisions} left, add anyway`
+    : `Add ${c.lines} lines to my records`;
+}
+$('revBody').addEventListener('click', async e => {
+  const gk = e.target.closest('[data-gk]');
+  if (gk) {
+    const g = IMP.groups.find(x => x.key === gk.dataset.gk);
+    if (g) { g.category = gk.dataset.c; g.done = true; await savePending(); paintReview(); }
+    return;
+  }
+  const pc = e.target.closest('[data-pair]');
+  if (pc) {
+    const p = IMP.pairs[Number(pc.dataset.pair)];
+    if (p) { p.choice = pc.dataset.choice; await savePending(); paintReview(); }
+  }
+});
+$('revClose').addEventListener('click', async () => {
+  closeSheet('revSheet');
+  await savePending();
+  await renderStatementScreen();
+  say('Saved for later. Nothing has been added yet.');
+});
+$('revCommit').addEventListener('click', async () => {
+  const c = summaryCounts();
+  const go = async () => {
+    try {
+      const res = await commitImport();
+      closeSheet('revSheet');
+      say(`Added ${res.added} lines from your statement.`);
+      await loadRules();
+      await afterLedgerKnown();
+      await renderStatementScreen();
+    } catch (err) { showError(dbErrorText(err), err); }
+  };
+  if (c.decisions) {
+    confirmSheet({
+      title: 'Add without deciding?',
+      body: `${c.decisions} ${c.decisions === 1 ? 'line group is' : 'things are'} still undecided. `
+          + 'Anything without a category is filed under Other, and you can change it any time. '
+          + 'Nothing you typed will be deleted.',
+      yes: 'Add them anyway',
+      run: go,
+    });
+  } else await go();
+});
+
 /* ══════════ navigation ══════════ */
 window.go = s => {
   document.querySelectorAll('.screen').forEach(x => x.classList.remove('on'));
@@ -1645,6 +2361,212 @@ if (location.search.includes('selftest')) setTimeout(async () => {
     ck('2000 records: bulk write in one transaction', wrote < 3000, wrote + 'ms');
     await delLedgerRows(perfLedger);
     ck('perf rows cleaned up', (await countLedger(perfLedger)) === 0);
+
+    /* ── STATEMENT IMPORT, proven against the fixture PDFs ── */
+    const fx = async n => new Uint8Array(await (await fetch('fixtures/' + n)).arrayBuffer());
+    let haveFixtures = true;
+    try { await fx('cb-clean.pdf'); } catch (_) { haveFixtures = false; }
+    ck('fixtures reachable for the import tests', haveFixtures,
+      haveFixtures ? '' : 'skipped, fixtures/ not served');
+
+    /* A check must CREATE the state it needs and put it back. A walked import left
+       an entry in the registry, and the re-import guard then failed this whole
+       block, which is a check depending on what somebody else left behind. */
+    const importsBefore = haveFixtures ? ((await metaGet('imports')) || []) : null;
+    const pendingBefore = haveFixtures ? ((await metaGet('pendingImport')) || null) : null;
+    if (haveFixtures) { await metaSet('imports', []); await metaSet('pendingImport', null); }
+
+    if (haveFixtures) {
+      /* dictionary precedence: the specific pattern must beat the general one */
+      ck('dictionary: UBER *EATS is food, not a taxi',
+        classify('UBER *EATS PENDING COLOMBO', false).category === 'food');
+      ck('dictionary: plain UBER is transport',
+        classify('UBER TRIP 8842', false).category === 'ride');
+      ck('dictionary: PICKME FOOD beats PICKME',
+        classify('PICKME FOOD ORDER 22119', false).category === 'food'
+        && classify('PICKME*TRIP 884213', false).category === 'ride');
+      ck('reference numbers do not make a merchant unique',
+        merchKey('PICKME*TRIP 884213') === merchKey('PICKME*TRIP 991020'),
+        merchKey('PICKME*TRIP 884213'));
+      ck('transfers, fees and refunds get their own type',
+        classify('FUND TRANSFER TO 8009988776', false).txType === 'transfer'
+        && classify('SERVICE CHARGE MONTHLY', false).txType === 'fee'
+        && classify('REVERSAL DARAZ*ORDER 9912004', true).txType === 'refund');
+      ck('money in is never an expense', classify('SALARY CREDIT JULY', true).txType === 'credit');
+
+      /* dates, day first as Sri Lankan banks print them */
+      ck('date: 03/07/2026 reads as 3 July', parseDate('03/07/2026') === '2026-07-03');
+      ck('date: single digits accepted', parseDate('2/6/2026') === '2026-06-02');
+      ck('date: 15 Jul 2026 accepted', parseDate('15 Jul 2026') === '2026-07-15');
+      ck('date: nonsense refused', parseDate('not a date') === null && parseDate('') === null);
+      ck('amount: 12,450.00 is 1245000 cents', parseMoneyCents('12,450.00') === 1245000);
+      ck('amount: a bare year is not money', parseMoneyCents('2026') === null);
+
+      /* the clean statement */
+      const clean = await analyseStatement(await fx('cb-clean.pdf'), null, 'commercial');
+      ck('clean statement parses', !!clean.ok, clean.error || '');
+      ck('clean statement: all 30 lines found across both pages',
+        clean.ok && clean.rows.length === 30, clean.ok ? clean.rows.length + ' rows' : '');
+      ck('clean statement: recognised as Commercial Bank', clean.ok && clean.looksRight);
+      ck('clean statement: period read from the rows',
+        clean.ok && /July 2026/.test(clean.period), clean.ok ? clean.period : '');
+      if (clean.ok) {
+        const spend = clean.rows.filter(r => r.txType === 'expense');
+        const unknown = spend.filter(r => r.confidence === 'low');
+        ck('clean statement: 7 lines are not spending, and none is counted as spending',
+          clean.rows.filter(r => r.txType !== 'expense').length === 7
+          && clean.rows.filter(r => r.txType !== 'expense').every(r => !isExpense(r)),
+          clean.rows.filter(r => r.txType !== 'expense').length + ' non-spend');
+        ck('clean statement: a salary credit is money in, never an expense',
+          (clean.rows.find(r => /SALARY/i.test(r.rawDesc)) || {}).txType === 'credit');
+        /* The exact total is the strongest guard against reading the BALANCE column
+           as the amount: a single balance bleeding in moves this by lakhs. */
+        ck('clean statement: every amount is exact, so no balance leaked in',
+          sum(clean.rows) === 67740900, fmt(sum(clean.rows)) + ' vs 677,409 expected');
+        ck('clean statement: a carried forward line is not a transaction',
+          !clean.rows.some(r => /CARRIED FORWARD|CLOSING BALANCE/i.test(r.rawDesc)));
+        const groups = buildGroups(clean);
+        /* 15 is the ceiling from the product brief. Zero is the ideal, and it happens
+           here only because the fixture and the shipped dictionary come from the same
+           Sri Lankan merchant list. A real statement will carry unknowns, which is
+           why the malformed fixture below asserts that unknowns DO raise a decision. */
+        ck('clean statement: decisions stay under the 15 ceiling',
+          groups.length <= 15, groups.length + ' groups, ' + unknown.length + ' unknown lines');
+        ck('clean statement: the dictionary carried most of the work',
+          spend.filter(r => r.confidence === 'high').length >= spend.length * 0.6,
+          spend.filter(r => r.confidence === 'high').length + ' of ' + spend.length);
+      }
+
+      /* the scanned page must be refused honestly, not guessed at */
+      const scan = await analyseStatement(await fx('cb-scanned.pdf'), null, 'commercial');
+      ck('a scanned statement is refused, not guessed', scan.error === 'needsOCR', scan.error || 'no error');
+      ck('the refusal explains what to do',
+        /scan/i.test(impErrorText(scan)) && /text PDF/i.test(impErrorText(scan)));
+
+      /* the locked statement: refuse, then open with the password */
+      let locked = null, threw = '';
+      try { locked = await analyseStatement(await fx('cb-locked.pdf'), null, 'commercial'); }
+      catch (e) { threw = e.message; }
+      ck('a locked statement asks for a password', threw === PW_NEEDED, threw || 'did not ask');
+      let wrong = '';
+      try { await analyseStatement(await fx('cb-locked.pdf'), 'wrongpw', 'commercial'); }
+      catch (e) { wrong = e.message; }
+      ck('a wrong password is reported as wrong, not as a broken file', wrong === PW_WRONG, wrong);
+      /* the same bytes must survive a failed attempt, or one typo ends the import */
+      const sameBytes = await fx('cb-locked.pdf');
+      let firstFail = '';
+      try { await analyseStatement(sameBytes, 'wrongpw', 'commercial'); } catch (e) { firstFail = e.message; }
+      const retry = await analyseStatement(sameBytes, '941234567V', 'commercial');
+      ck('a wrong password can be retried on the same file',
+        firstFail === PW_WRONG && !!retry.ok, firstFail + ' then ' + (retry.error || 'ok'));
+      const opened = await analyseStatement(await fx('cb-locked.pdf'), '941234567V', 'commercial');
+      ck('the right password opens the statement', !!opened.ok, opened.error || '');
+      ck('locked statement: its 5 lines parse', opened.ok && opened.rows.length === 5,
+        opened.ok ? opened.rows.length + ' rows' : '');
+
+      /* the malformed table: read what is readable, invent nothing */
+      const mal = await analyseStatement(await fx('cb-malformed.pdf'), null, 'commercial');
+      ck('a malformed table still yields rows', !!mal.ok, mal.error || '');
+      if (mal.ok) {
+        ck('malformed: a wrapped description is joined to its own row',
+          mal.rows.some(r => /CARD ENDING 4412/i.test(r.rawDesc)
+            && /KEELLS SUPER/i.test(r.rawDesc)),
+          mal.rows.length + ' rows');
+        ck('malformed: an amount inside the description is not read as the amount',
+          (mal.rows.find(r => /SOMETHING WITH/i.test(r.rawDesc)) || {}).amt_c === 32000);
+        ck('malformed: a repeated mid page header is not a transaction',
+          !mal.rows.some(r => /COMMERCIAL BANK/i.test(r.rawDesc)));
+        ck('malformed: every row keeps a real date and a real amount',
+          mal.rows.every(r => /^\d{4}-\d{2}-\d{2}$/.test(r.date) && r.amt_c > 0));
+        /* an unrecognised merchant must RAISE a decision rather than be filed quietly */
+        const malGroups = buildGroups(mal);
+        ck('an unrecognised merchant raises a decision instead of being filed as Other',
+          malGroups.length >= 1 && malGroups.length <= 15,
+          malGroups.length + ' groups: ' + malGroups.map(g => g.label).join(', ').slice(0, 60));
+        ck('grouping puts identical merchants behind ONE decision',
+          malGroups.every(g => g.rows.every(r => r.key === g.key)));
+      }
+
+      /* duplicate matching against hand typed rows */
+      const dup = await analyseStatement(await fx('cb-dupes.pdf'), null, 'commercial');
+      ck('duplicate fixture parses', !!dup.ok, dup.error || '');
+      if (dup.ok) {
+        const mkManual = (amt, merchant, date) =>
+          makeTx({amt_c: amt, merchant, category:'other', date, ledger:'personal'});
+        const manual = [
+          mkManual(348025, 'Keells Super', '2026-08-03'),   /* same day, same amount */
+          mkManual(234000, 'Uber Eats', '2026-08-03'),      /* one day out */
+          mkManual(560000, 'Cargills', '2026-08-04'),       /* three days out, inside the window */
+          mkManual(86000, 'PickMe', '2026-08-05'),          /* two statement lines share this amount */
+          mkManual(999999, 'Nothing like it', '2026-08-03'),
+        ];
+        const pairs = findDuplicates(dup.rows, manual);
+        ck('duplicates: the obvious same day pair is found',
+          pairs.some(p => p.manual.merchant === 'Keells Super' && p.choice === 'match'));
+        ck('duplicates: a one day difference still matches',
+          pairs.some(p => p.manual.merchant === 'Uber Eats' && p.choice === 'match'));
+        ck('duplicates: three days out is offered but not assumed',
+          pairs.some(p => p.manual.merchant === 'Cargills' && p.choice !== 'match'));
+        ck('duplicates: an unrelated amount is left alone',
+          !pairs.some(p => p.manual.merchant === 'Nothing like it'));
+        ck('duplicates: one manual row is never matched to two statement lines',
+          new Set(pairs.map(p => p.manualId)).size === pairs.length,
+          pairs.length + ' pairs');
+        ck('duplicates: matching is capped at a 3 day window',
+          pairs.every(p => p.gap <= 3));
+
+        /* Commit into an ISOLATED ledger, so leftovers from a real walked import can
+           never be mistaken for what this test created. Learned the hard way twice. */
+        const prevLedger = LEDGER;
+        LEDGER = '__imp';
+        const manualIso = manual.map(m => makeTx(Object.assign({}, m, {ledger: '__imp'})));
+        await putMany(manualIso);
+        const pairsIso = findDuplicates(dup.rows, manualIso);
+        IMP = {analysis: dup, pairs: pairsIso, groups: buildGroups(dup)};
+        const before = sum((await readMonth('__imp|2026-08')).filter(isExpense));
+        const res = await commitImport();
+        const after = await readMonth('__imp|2026-08');
+        const matchedRows = after.filter(r => r.state === 'matched');
+        const authRows = after.filter(r => r.state === 'authoritative');
+        ck('commit: statement lines are stored as authoritative',
+          authRows.length > 0 && authRows.every(r => r.source === 'statement'));
+        ck('commit: a matched hand typed row is KEPT, marked superseded',
+          matchedRows.length === res.matched && matchedRows.every(r => r.source === 'manual'),
+          matchedRows.length + ' kept');
+        ck('commit: a matched pair is not counted twice',
+          matchedRows.every(r => !isExpense(r)));
+        ck('commit: the typed note and merchant survive onto the bank line',
+          authRows.some(r => r.matchId && r.merchant === 'Keells Super'));
+        const totalAfter = sum(after.filter(isExpense));
+        ck('commit: the month total is the bank total plus what the bank never saw',
+          totalAfter > before, 'before ' + fmt(before) + ', after ' + fmt(totalAfter));
+
+        /* the same file can never be brought in twice */
+        const again = await analyseStatement(await fx('cb-dupes.pdf'), null, 'commercial');
+        ck('the same statement file cannot be imported twice',
+          again.error === 'alreadyImported', again.error || 'it was allowed');
+
+        /* a correction is remembered for next month */
+        await learnRule(merchKey('WHOLESALE SOMETHING 4412'), 'Wholesale Something', 'groc');
+        ck('a correction is remembered and beats the dictionary',
+          classify('WHOLESALE SOMETHING 4412', false).category === 'groc'
+          && classify('WHOLESALE SOMETHING 4412', false).confidence === 'learned');
+
+        /* clean up everything this block created, and give the ledger back */
+        await delLedgerRows('__imp');
+        LEDGER = prevLedger;
+        await work('rules','readwrite', t => { t.objectStore('rules').clear(); });
+        await loadRules();
+        ck('import test rows cleaned up and the ledger restored',
+          (await countLedger('__imp')) === 0 && LEDGER === prevLedger);
+      }
+      /* put the store back exactly as it was found */
+      await metaSet('imports', importsBefore);
+      await metaSet('pendingImport', pendingBefore);
+      IMP = null;
+      ck('the harness restored the import registry it borrowed',
+        JSON.stringify((await metaGet('imports')) || []) === JSON.stringify(importsBefore));
+    }
 
     /* clean the probes, leave the store as it was found */
     await delMany([dRow.id, pRow.id]);

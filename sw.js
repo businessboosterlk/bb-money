@@ -15,9 +15,13 @@
 
    Also: never `ignoreSearch`. It made ?selftest resolve to the plain cached page,
    so the harness could not be reached on an installed copy. */
-const CACHE = 'bbmoney-shell-v2';
+const CACHE = 'bbmoney-shell-v3';
 const SHELL = ['./', './index.html', './manifest.json',
                './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
+/* The PDF reader is fetched on first use rather than precached, because it is 1.4MB
+   and most opens never import a statement. Once cached, importing works offline.
+   It is a local file in vendor/, the same as an icon: no statement byte and no
+   request of any kind leaves this device. */
 
 self.addEventListener('install', e => {
   e.waitUntil(
