@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="BB Money">
-<meta name="build" content="bbmoney-0.4.1">
+<meta name="build" content="bbmoney-0.4.2">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
@@ -251,6 +251,20 @@ input[type=file]{width:100%;font-size:var(--fs-sm)}
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .screen{display:none}.screen.on{display:block}
+/* ══ BB APP FOUNDATIONS. Every one of these is a thing the phone does that the
+   person did not ask for. Owned by the bb-app-foundations skill. ══ */
+/* 2. iOS zooms the whole viewport when a focused field is under 16px. Coarse
+      pointers only, so a laptop keeps its own scale and nothing reflows there. */
+@media (pointer:coarse){
+  input:not(.amount-in),select,textarea{font-size:16px}
+}
+/* 3. Stop a sheet's scroll continuing into the page behind it. */
+.sheet .sbody,#firstrun{overscroll-behavior:contain}
+/* 7. No blue flash on tap, and no long press offering to copy a button. Inputs,
+      amounts and notes stay selectable: stopping a person copying their own
+      figures is rude. */
+button,label,.tabs,.personrow,.tx,.catrow,.setrow,.chip,[role="button"]{
+  -webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 @media(prefers-reduced-motion:reduce){*{transition-duration:.01ms!important;animation-duration:.01ms!important}}
 #stResults{position:fixed;inset:0;z-index:300;background:#fff;color:#111;overflow:auto;
   padding:18px;font:12.5px/1.55 ui-monospace,Menlo,monospace;white-space:pre-wrap;display:none}
@@ -521,7 +535,7 @@ input[type=file]{width:100%;font-size:var(--fs-sm)}
     <p class="note" style="margin-top:2px">Optional. One figure to measure the month against.
     Nothing is locked and nothing turns red.</p>
     <label for="budgetIn">Amount, LKR</label>
-    <input type="text" id="budgetIn" inputmode="numeric" placeholder="150,000" autocomplete="off">
+    <input type="text" id="budgetIn" inputmode="numeric" placeholder="150,000" autocomplete="off" enterkeyhint="done">
     <div style="height:12px"></div>
     <div style="display:flex;gap:8px">
       <button class="btn ghost sm" id="budgetClear">Remove</button>
@@ -585,12 +599,12 @@ input[type=file]{width:100%;font-size:var(--fs-sm)}
     <label id="catLabel" style="margin-top:16px">Category</label>
     <div class="chips" id="fCats" role="group" aria-labelledby="catLabel"></div>
     <label for="fWho" style="margin-top:16px">Where, optional</label>
-    <input type="text" id="fWho" placeholder="Keells, PickMe, Uber Eats" autocomplete="off" enterkeyhint="done">
+    <input type="text" id="fWho" placeholder="Keells, PickMe, Uber Eats" autocomplete="off" enterkeyhint="next">
     <button type="button" class="btn quiet" id="moreToggle" aria-expanded="false" aria-controls="moreWrap"
       style="margin-top:8px">Note and date</button>
     <div id="moreWrap" hidden>
       <label for="fNote">Note</label>
-      <input type="text" id="fNote" placeholder="Optional" autocomplete="off">
+      <input type="text" id="fNote" placeholder="Optional" autocomplete="off" enterkeyhint="done">
       <label for="fDate">Date</label>
       <input type="date" id="fDate">
     </div>
@@ -672,7 +686,7 @@ input[type=file]{width:100%;font-size:var(--fs-sm)}
 <script>
 (() => {
 'use strict';
-const APP = 'BB Money', APP_VER = '0.4.1', SCHEMA = 4;
+const APP = 'BB Money', APP_VER = '0.4.2', SCHEMA = 4;
 const DB_NAME = 'bbmoney', DB_VER = 4;
 /* Two people share this app, each with their own records on this phone.
    NOTE ON THE PIN, and it is deliberate: no PIN is written into this page. The page
@@ -1296,16 +1310,50 @@ function unlockBody(){
 const focusables = el => [...el.querySelectorAll(
   'button:not([disabled]):not([hidden]),input:not([disabled]),select,textarea,[tabindex]:not([tabindex="-1"])')]
   .filter(e => e.offsetParent !== null || e === document.activeElement);
+/* FAULT 5: covered is not the same as unreachable. A thumb still finds a button
+   beside a sheet, and a keyboard or screen reader walks straight into content the
+   person cannot see. Every direct child of body that is not the open overlay gets
+   `inert`. Generic, never a named selector, so it survives being cast elsewhere. */
+function setInert(openId){
+  [...document.body.children].forEach(el => {
+    if (el.id === openId) { el.removeAttribute('inert'); return; }
+    if (openId) el.setAttribute('inert', '');
+    else el.removeAttribute('inert');
+  });
+}
+/* FAULT 6: on Android, Back leaving the app is the loudest sign this is a web
+   page. Push an entry when an overlay opens, close on popstate, retire it on
+   close. scrollRestoration must be manual or the browser's own restore beats the
+   freeze, and a `closing` flag stops history.back() re-entering the close. */
+let histDepth = 0, closingByBack = false;
+try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (_) {}
+addEventListener('popstate', () => {
+  if (!openSheets.length) return;
+  closingByBack = true;
+  histDepth = Math.max(0, histDepth - 1);
+  const top = openSheets[openSheets.length - 1];
+  const closer = $(top) && $(top).querySelector('.x');
+  if (closer) closer.click(); else closeSheet(top);
+  closingByBack = false;
+});
+
 function openSheet(id, focusId){
   if (!openSheets.length) { lastFocus = document.activeElement; lockBody(); }
   openSheets.push(id);
   $(id).classList.add('on');
+  setInert(id);
+  try { history.pushState({sheet:id}, ''); histDepth++; } catch (_) {}
   const f = focusId && $(focusId);
   (f || focusables($(id))[0] || $(id)).focus();
 }
 function closeSheet(id){
   $(id).classList.remove('on');
   openSheets = openSheets.filter(s => s !== id);
+  setInert(openSheets.length ? openSheets[openSheets.length - 1] : null);
+  if (!closingByBack && histDepth > 0) {
+    histDepth--;
+    try { history.back(); } catch (_) {}
+  }
   if (!openSheets.length) {
     unlockBody();
     if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
@@ -1419,11 +1467,11 @@ function openDetail(rec){
       autocomplete="off" ${authoritative ? 'readonly' : ''}>
     ${authoritative ? '<p class="note">The amount and date come from the statement, so they stay as the bank recorded them.</p>' : ''}
     <label for="dWho" style="margin-top:14px">Where</label>
-    <input type="text" id="dWho" value="${esc(draft.merchant)}" placeholder="Optional" autocomplete="off">
+    <input type="text" id="dWho" value="${esc(draft.merchant)}" placeholder="Optional" autocomplete="off" enterkeyhint="next">
     <label id="dCatLab" style="margin-top:14px">Category</label>
     <div class="chips" id="dCats" role="group" aria-labelledby="dCatLab"></div>
     <label for="dNote" style="margin-top:14px">Note</label>
-    <input type="text" id="dNote" value="${esc(draft.note)}" placeholder="Optional" autocomplete="off">
+    <input type="text" id="dNote" value="${esc(draft.note)}" placeholder="Optional" autocomplete="off" enterkeyhint="done">
     <label for="dDate">Date</label>
     <input type="date" id="dDate" value="${esc(draft.date)}" max="${todayISO()}" ${authoritative ? 'readonly' : ''}>
     <p class="note">${stateWords(draft)}</p>
@@ -2473,6 +2521,51 @@ if (location.search.includes('selftest')) setTimeout(async () => {
       !/user-scalable\s*=\s*no|maximum-scale\s*=\s*1/.test(
         document.querySelector('meta[name=viewport]').content),
       document.querySelector('meta[name=viewport]').content.slice(0, 60));
+
+    /* ── BB APP FOUNDATIONS: the nine, and they must PROVE it, not read a class ── */
+    const coarse = matchMedia('(pointer:coarse)').matches;
+    /* the field zoom rule is coarse only, so on a laptop it can never fail. Print
+       the denominator rather than passing silently on the wrong pointer type. */
+    const fields = [...document.querySelectorAll('input:not([type=file]),select,textarea')]
+      .filter(el => el.type !== 'hidden');
+    const small = fields.filter(el => parseFloat(getComputedStyle(el).fontSize) < 16);
+    ck('App: no field under 16px, so focusing one cannot zoom the screen',
+      coarse ? small.length === 0 : true,
+      coarse ? small.length + ' of ' + fields.length + ' under 16px'
+             : 'pointer is FINE not coarse, rule cannot fire here, ' + fields.length + ' fields seen');
+    ck('App: the page does not pull to refresh',
+      /none/.test(getComputedStyle(document.documentElement).overscrollBehaviorY),
+      getComputedStyle(document.documentElement).overscrollBehaviorY);
+    ck('App: a sheet does not chain its scroll to the page',
+      [...document.querySelectorAll('.sheet .sbody')]
+        .every(el => /contain/.test(getComputedStyle(el).overscrollBehavior)));
+    ck('App: no blue flash on tap',
+      getComputedStyle(document.querySelector('.tabs button')).webkitTapHighlightColor
+        .replace(/\s/g, '').includes('rgba(0,0,0,0)'),
+      getComputedStyle(document.querySelector('.tabs button')).webkitTapHighlightColor);
+    ck('App: chrome does not select on drag',
+      getComputedStyle(document.querySelector('.tabs button')).userSelect === 'none');
+    ck('App: a value stays selectable, because copying your own figures is fine',
+      getComputedStyle($('totSpent')).userSelect !== 'none');
+    /* the last three open a real overlay and measure */
+    const beforeInert = $('s-home').hasAttribute('inert');
+    openSheet('cfSheet', 'cfYes');
+    ck('App: the page behind an open sheet is frozen',
+      getComputedStyle(document.body).position === 'fixed');
+    ck('App: the page behind an open sheet is out of reach',
+      document.querySelector('main.main').hasAttribute('inert')
+      && document.querySelector('.tabs').hasAttribute('inert')
+      && !$('cfSheet').hasAttribute('inert'));
+    ck('App: back closes the sheet instead of leaving the app',
+      histDepth > 0, 'history depth ' + histDepth);
+    closeSheet('cfSheet');
+    await new Promise(r => setTimeout(r, 60));
+    ck('App: closing gives the page back',
+      !document.querySelector('main.main').hasAttribute('inert')
+      && getComputedStyle(document.body).position !== 'fixed'
+      && $('s-home').hasAttribute('inert') === beforeInert);
+    ck('App: no sheet is sized in vh, which is taller than the screen',
+      !/max-height:\s*\d+vh/.test(document.documentElement.innerHTML));
 
     /* THE BOTTOM BAR SITS AT THE SAME HEIGHT ON EVERY SCREEN.
        Faked at a real iPhone inset, the tab bar and a sheet's footer must agree. */
