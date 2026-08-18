@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="BB Money">
-<meta name="build" content="bbmoney-0.4.2">
+<meta name="build" content="bbmoney-0.5.0">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
@@ -162,6 +162,14 @@ input[type=file]{width:100%;font-size:var(--fs-sm)}
 .amount-in{font-size:30px;font-weight:750;text-align:center;letter-spacing:-.01em;
   min-height:64px;font-variant-numeric:tabular-nums}
 .chips{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.repeats{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;
+  scrollbar-width:none}
+.repeats::-webkit-scrollbar{display:none}
+.repeats button{flex:0 0 auto;display:flex;flex-direction:column;align-items:flex-start;gap:2px;
+  min-height:56px;padding:9px 14px;border:1.5px solid var(--line2);border-radius:var(--r-sm);
+  background:#fff;cursor:pointer;text-align:left}
+.repeats button b{font-size:13.5px;font-weight:650;white-space:nowrap}
+.repeats button span{font-size:var(--fs-xs);color:var(--muted);font-variant-numeric:tabular-nums}
 .chip{display:flex;align-items:center;gap:9px;min-height:48px;padding:10px 12px;
   border:1.5px solid var(--line2);border-radius:var(--r-sm);background:#fff;cursor:pointer;
   font-size:13.5px;font-weight:650;color:var(--ink2);text-align:left}
@@ -593,13 +601,19 @@ button,label,.tabs,.personrow,.tx,.catrow,.setrow,.chip,[role="button"]{
     <button class="x" id="addClose" aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
   </div></div>
   <form class="sbody" id="addForm"><div class="col">
+    <div id="repeatWrap" hidden>
+      <label id="repeatLab" style="margin-top:4px">Again</label>
+      <div class="repeats" id="repeats" role="group" aria-labelledby="repeatLab"></div>
+    </div>
     <label for="fAmt">Amount, LKR</label>
     <input type="text" class="amount-in" id="fAmt" inputmode="decimal" placeholder="0"
       autocomplete="off" enterkeyhint="done" required>
     <label id="catLabel" style="margin-top:16px">Category</label>
     <div class="chips" id="fCats" role="group" aria-labelledby="catLabel"></div>
     <label for="fWho" style="margin-top:16px">Where, optional</label>
-    <input type="text" id="fWho" placeholder="Keells, PickMe, Uber Eats" autocomplete="off" enterkeyhint="next">
+    <input type="text" id="fWho" placeholder="Keells, PickMe, Uber Eats" autocomplete="off"
+      enterkeyhint="next" autocapitalize="words" spellcheck="false">
+    <p class="note" id="whoHint" hidden></p>
     <button type="button" class="btn quiet" id="moreToggle" aria-expanded="false" aria-controls="moreWrap"
       style="margin-top:8px">Note and date</button>
     <div id="moreWrap" hidden>
@@ -686,7 +700,7 @@ button,label,.tabs,.personrow,.tx,.catrow,.setrow,.chip,[role="button"]{
 <script>
 (() => {
 'use strict';
-const APP = 'BB Money', APP_VER = '0.4.2', SCHEMA = 4;
+const APP = 'BB Money', APP_VER = '0.5.0', SCHEMA = 4;
 const DB_NAME = 'bbmoney', DB_VER = 4;
 /* Two people share this app, each with their own records on this phone.
    NOTE ON THE PIN, and it is deliberate: no PIN is written into this page. The page
@@ -1378,6 +1392,73 @@ document.addEventListener('keydown', e => {
 
 /* ══════════ add ══════════ */
 let addCat = 'food', saving = false;
+/* Once a person picks a category by hand, the app stops guessing at it. Guessing
+   over a deliberate choice is how "Pick Me Food" ends up filed under Transport. */
+let catTouched = false;
+
+/* FEATURE 1: read what was typed in Where and file it correctly.
+   The dictionary already exists for statement import; the add screen simply was
+   not consulting it, so a typed "Keells" kept whatever category was last used. */
+function suggestCategory(text){
+  const t = String(text || '').trim();
+  if (t.length < 3) return null;
+  const c = classify(t, false);
+  if (c.txType !== 'expense') return null;          /* never guess a transfer here */
+  if (c.confidence !== 'high' && c.confidence !== 'learned') return null;
+  return {category: c.category, merchant: c.merchant, learned: c.confidence === 'learned'};
+}
+function applySuggestion(){
+  const hint = $('whoHint');
+  const s = suggestCategory($('fWho').value);
+  if (!s || catTouched) { hint.hidden = true; return; }
+  if (s.category !== addCat) { addCat = s.category; paintChips('fCats', addCat); }
+  hint.hidden = false;
+  hint.textContent = `Filed under ${catOf(s.category).name.toLowerCase()}. Tap another if that is wrong.`;
+}
+
+/* FEATURE 4: repeat what you actually buy. Built from this person's own recent
+   records, most frequent first, using the amount from the most recent one. */
+async function buildRepeats(){
+  const wrap = $('repeatWrap');
+  try {
+    const months = [curMonth(), monthShift(curMonth(), -1), monthShift(curMonth(), -2)];
+    const rows = (await Promise.all(months.map(m => readMonth(LEDGER + '|' + m)))).flat()
+      .filter(r => r.txType === 'expense' && r.merchant);
+    if (rows.length < 3) { wrap.hidden = true; return; }
+    const groups = {};
+    rows.forEach(r => {
+      const k = merchKey(r.merchant) + '|' + r.category;
+      const g = groups[k] || (groups[k] = {n: 0, row: r, merchant: r.merchant, category: r.category});
+      g.n++;
+      if (r.date > g.row.date || (r.date === g.row.date
+          && String(r.createdAt) > String(g.row.createdAt))) g.row = r;
+    });
+    const top = Object.values(groups)
+      .filter(g => g.n >= 2)
+      .sort((a, b) => (b.n - a.n) || b.row.date.localeCompare(a.row.date))
+      .slice(0, 4);
+    if (!top.length) { wrap.hidden = true; return; }
+    wrap.hidden = false;
+    $('repeats').innerHTML = top.map((g, i) => `
+      <button type="button" data-rep="${i}">
+        <b>${esc(g.merchant)}</b>
+        <span>LKR ${fmt(g.row.amt_c)}</span>
+      </button>`).join('');
+    $('repeats').__top = top;
+  } catch (_) { wrap.hidden = true; }
+}
+$('repeats').addEventListener('click', e => {
+  const b = e.target.closest('[data-rep]'); if (!b) return;
+  const g = ($('repeats').__top || [])[Number(b.dataset.rep)];
+  if (!g) return;
+  $('fAmt').value = fmt(g.row.amt_c);
+  $('fWho').value = g.merchant;
+  addCat = g.category; catTouched = true;
+  paintChips('fCats', addCat);
+  $('whoHint').hidden = true;
+  say(`${g.merchant}, LKR ${fmt(g.row.amt_c)}. Change anything, or save.`);
+  $('saveBtn').focus();
+});
 function paintChips(host, selected){
   $(host).innerHTML = CATS.map(([k, icon, name]) => `
     <button type="button" class="chip" data-c="${k}" aria-pressed="${k === selected}">
@@ -1387,7 +1468,8 @@ function paintChips(host, selected){
 }
 $('fCats').addEventListener('click', e => {
   const b = e.target.closest('.chip'); if (!b) return;
-  addCat = b.dataset.c; paintChips('fCats', addCat);
+  addCat = b.dataset.c; catTouched = true; $('whoHint').hidden = true;
+  paintChips('fCats', addCat);
   const again = $('fCats').querySelector(`[data-c="${addCat}"]`); if (again) again.focus();
 });
 async function openAdd(){
@@ -1397,10 +1479,13 @@ async function openAdd(){
   const t = todayISO();
   $('fDate').value = t; $('fDate').max = t;
   $('moreWrap').hidden = true; $('moreToggle').setAttribute('aria-expanded', 'false');
+  $('whoHint').hidden = true; catTouched = false;
   saving = false; $('saveBtn').disabled = false;
+  await buildRepeats();
   openSheet('addSheet', 'fAmt');
 }
 $('addOpen').addEventListener('click', openAdd);
+$('fWho').addEventListener('input', applySuggestion);
 $('addClose').addEventListener('click', () => closeSheet('addSheet'));
 $('moreToggle').addEventListener('click', () => {
   const w = $('moreWrap'), open = w.hidden;
@@ -1421,6 +1506,14 @@ $('addForm').addEventListener('submit', async e => {
       note: $('fNote').value.trim(), date: d, category: addCat});
     await putRow(rec);
     await pset('lastCat', addCat);
+    /* If they typed a merchant and chose a category by hand, that correction is
+       worth more than the shipped dictionary. Remember it for next time. */
+    if (rec.merchant && catTouched) {
+      const guess = suggestCategory(rec.merchant);
+      if (!guess || guess.category !== addCat) {
+        await learnRule(merchKey(rec.merchant), rec.merchant, addCat);
+      }
+    }
     await bumpSaveCount();
     closeSheet('addSheet');
     say(`Saved. LKR ${fmt(amt)}, ${catOf(addCat).name.toLowerCase()}.`);
@@ -1809,7 +1902,14 @@ const DICT = [
   ['ASIRI','Asiri','fam',5], ['NAWALOKA','Nawaloka','fam',5], ['HEMAS','Hemas','fam',5],
   ['PHARMAC','Pharmacy','fam',5], ['LANKA HOSPITAL','Lanka Hospitals','fam',5],
 ];
-const DICT_SORTED = DICT.slice().sort((a, b) => (b[3] - a[3]) || (b[0].length - a[0].length));
+/* People do not type a merchant the way a bank prints it. His screenshot said
+   "Pick Me Food"; the statement says "PICKME FOOD". Matching also happens on a
+   squashed form with spaces and punctuation removed, so both land in the same
+   place. Precedence still decides, so PICKMEFOOD beats PICKME. */
+const squash = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const DICT_SORTED = DICT.slice()
+  .sort((a, b) => (b[3] - a[3]) || (b[0].length - a[0].length))
+  .map(e => e.concat([squash(e[0])]));
 
 /* Lines that are not money moving. These get their own transaction type and are
    never forced into a spending category. */
@@ -1827,14 +1927,22 @@ const merchKey = s => normMerch(s)
   .replace(/\s+/g, ' ').trim();
 
 let LEARNED = {};   /* raw key -> {merchant, category} , loaded at boot */
+/* A correction belongs to the person who made it. Shiara filing a merchant under
+   groceries must not rewrite what Thulaib's app suggests. */
+const ruleKey = raw => (PERSON || 'none') + '|' + raw;
 async function loadRules(){
-  try { LEARNED = Object.fromEntries((await work('rules','readonly', t => {
-    const rq = t.objectStore('rules').getAll(); return () => rq.result || [];
-  })).map(r => [r.raw, r])); }
-  catch (_) { LEARNED = {}; }
+  try {
+    const all = await work('rules','readonly', t => {
+      const rq = t.objectStore('rules').getAll(); return () => rq.result || [];
+    });
+    const mine = (PERSON || 'none') + '|';
+    LEARNED = Object.fromEntries(all
+      .filter(r => String(r.raw).startsWith(mine))
+      .map(r => [String(r.raw).slice(mine.length), r]));
+  } catch (_) { LEARNED = {}; }
 }
 async function learnRule(rawKey, merchant, category){
-  const row = {raw: rawKey, merchant, category, updatedAt: new Date().toISOString()};
+  const row = {raw: ruleKey(rawKey), merchant, category, updatedAt: new Date().toISOString()};
   LEARNED[rawKey] = row;
   try { await work('rules','readwrite', t => { t.objectStore('rules').put(row); }); }
   catch (_) {}
@@ -1848,8 +1956,10 @@ function classify(desc, isCredit){
   /* the phone's own correction always beats the shipped dictionary */
   if (LEARNED[key]) return {merchant: LEARNED[key].merchant, category: LEARNED[key].category,
     txType: 'expense', confidence: 'learned', key};
-  for (const [pat, merchant, category] of DICT_SORTED) {
-    if (up.includes(pat)) return {merchant, category, txType: 'expense', confidence: 'high', key};
+  const sq = squash(desc);
+  for (const [pat, merchant, category, , patSq] of DICT_SORTED) {
+    if (up.includes(pat) || (patSq.length >= 4 && sq.includes(patSq)))
+      return {merchant, category, txType: 'expense', confidence: 'high', key};
   }
   return {merchant: titleish(key), category: 'other', txType: 'expense', confidence: 'low', key};
 }
@@ -2745,6 +2855,80 @@ if (location.search.includes('selftest')) setTimeout(async () => {
     const stillThere = (await readMonth(LEDGER + '|' + curMonth())).find(r => r.id === pRow.id);
     ck('closing detail without saving leaves the stored record alone', stillThere.category === 'other');
 
+    /* ── FEATURE 1: typing a merchant files it correctly ── */
+    await openAdd();
+    $('fWho').value = 'Keells Super'; $('fWho').dispatchEvent(new Event('input'));
+    ck('typing a known merchant sets the category', addCat === 'groc', addCat);
+    ck('and it says so, so nothing changes silently',
+      !$('whoHint').hidden && /groceries/i.test($('whoHint').textContent));
+    $('fWho').value = 'Pick Me Food'; $('fWho').dispatchEvent(new Event('input'));
+    ck('the exact case from his screenshot now files as food, not transport',
+      addCat === 'food', addCat);
+    $('fWho').value = 'PickMe'; $('fWho').dispatchEvent(new Event('input'));
+    ck('and a plain PickMe is still transport', addCat === 'ride', addCat);
+    /* a deliberate choice must survive further typing */
+    $('fCats').querySelector('[data-c="fam"]').click();
+    $('fWho').value = 'Keells Super Liberty'; $('fWho').dispatchEvent(new Event('input'));
+    ck('a category chosen by hand is never overwritten by the guess',
+      addCat === 'fam' && $('whoHint').hidden, addCat);
+    ck('a transfer word is not guessed at on a typed expense',
+      suggestCategory('FUND TRANSFER TO 8009') === null);
+    ck('two letters are too little to guess from', suggestCategory('Ke') === null);
+    closeSheet('addSheet');
+
+    /* a correction is learned, and it belongs to the person who made it */
+    const learnProbe = 'Sarasavi Bookshop';
+    ck('an unknown merchant is not guessed at', suggestCategory(learnProbe) === null);
+    await learnRule(merchKey(learnProbe), learnProbe, 'shop');
+    ck('after one correction the same merchant is recognised',
+      (suggestCategory(learnProbe) || {}).category === 'shop');
+    const keepP = PERSON, keepL = LEDGER;
+    PERSON = PERSON === 'shiara' ? 'thulaib' : 'shiara';
+    await loadRules();
+    ck('a correction does not leak to the other person',
+      suggestCategory(learnProbe) === null);
+    PERSON = keepP; LEDGER = keepL;
+    await loadRules();
+    ck('and it is still there for the person who made it',
+      (suggestCategory(learnProbe) || {}).category === 'shop');
+    await work('rules','readwrite', t => { t.objectStore('rules').delete(ruleKey(merchKey(learnProbe))); });
+    await loadRules();
+
+    /* ── FEATURE 4: repeat what you actually buy ── */
+    const repProbes = [
+      makeTx({amt_c: 234000, merchant:'Uber Eats', category:'food', date: todayISO()}),
+      makeTx({amt_c: 260000, merchant:'Uber Eats', category:'food', date: todayISO()}),
+      makeTx({amt_c: 86000, merchant:'PickMe', category:'ride', date: todayISO()}),
+      makeTx({amt_c: 90000, merchant:'PickMe', category:'ride', date: todayISO()}),
+      makeTx({amt_c: 500000, merchant:'One Off Shop', category:'shop', date: todayISO()}),
+    ];
+    repProbes[1].createdAt = new Date(Date.parse(repProbes[0].createdAt) + 1000).toISOString();
+    await putMany(repProbes);
+    await openAdd();
+    const repTop = $('repeats').__top || [];
+    ck('repeats are built from this person own records',
+      !$('repeatWrap').hidden && repTop.length >= 2, repTop.length + ' offered');
+    ck('a one off purchase is not offered as a repeat',
+      !repTop.some(g => g.merchant === 'One Off Shop'));
+    ck('a repeat carries the amount from the most recent one',
+      (repTop.find(g => g.merchant === 'Uber Eats') || {}).row.amt_c === 260000,
+      fmt(((repTop.find(g => g.merchant === 'Uber Eats') || {}).row || {}).amt_c || 0));
+    $('repeats').querySelector('[data-rep="0"]').click();
+    ck('tapping a repeat fills the amount, the merchant and the category',
+      parseAmt($('fAmt').value) === repTop[0].row.amt_c
+      && $('fWho').value === repTop[0].merchant && addCat === repTop[0].category,
+      $('fWho').value + ' ' + $('fAmt').value);
+    closeSheet('addSheet');
+    await delMany(repProbes.map(r => r.id));
+    /* Ask the question in a ledger that genuinely has nothing, rather than assuming
+       the real store is empty. A walked session left records here and this check
+       read them, which is the fourth time shared state has made a check lie. */
+    const keepRP = PERSON, keepRL = LEDGER;
+    PERSON = '__rep'; LEDGER = '__rep';
+    await buildRepeats();
+    ck('with nothing to repeat the row is not shown at all', $('repeatWrap').hidden);
+    PERSON = keepRP; LEDGER = keepRL;
+
     /* future dates refused */
     await openAdd();
     ck('add sheet opens with the amount focused',
@@ -2809,6 +2993,12 @@ if (location.search.includes('selftest')) setTimeout(async () => {
       ck('dictionary: PICKME FOOD beats PICKME',
         classify('PICKME FOOD ORDER 22119', false).category === 'food'
         && classify('PICKME*TRIP 884213', false).category === 'ride');
+      /* a person types spaces where a bank prints none, and vice versa */
+      ck('dictionary: how a person types it matches how the bank prints it',
+        classify('Pick Me Food', false).category === 'food'
+        && classify('pickme food', false).category === 'food'
+        && classify('Uber eats', false).category === 'food'
+        && classify('keells', false).category === 'groc');
       ck('reference numbers do not make a merchant unique',
         merchKey('PICKME*TRIP 884213') === merchKey('PICKME*TRIP 991020'),
         merchKey('PICKME*TRIP 884213'));
